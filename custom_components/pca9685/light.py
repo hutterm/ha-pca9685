@@ -214,11 +214,15 @@ class PwmRgbLed(PwmSimpleLed):
 
 
 def _from_hass_brightness(brightness: int) -> int:
-    """Convert Home Assistant brightness units to percentage."""
-    return brightness / CONST_MAX_INTENSITY
+    """Convert Home Assistant  units to percentage."""
+    if brightness:
+      return brightness / CONST_MAX_INTENSITY
+    return 0
 
 
 def _from_hass_color(color: list) -> Color:
     """Convert Home Assistant RGB list to Color tuple."""
-    rgb = color_util.color_hs_to_RGB(*color)
-    return Color(*tuple(rgb))
+    if color:
+      rgb = color_util.color_hs_to_RGB(*color)
+      return Color(*tuple(rgb))
+    return Color(0,0,0)
