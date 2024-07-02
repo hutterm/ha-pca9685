@@ -1,4 +1,5 @@
 """Support for numbers that can be controlled using PWM."""
+
 from __future__ import annotations
 
 import logging

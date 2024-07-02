@@ -1,4 +1,5 @@
 """Support for LED lights that can be controlled using PWM."""
+
 import logging
 from typing import ClassVar
 
