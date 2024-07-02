@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from pwmled.driver.pca9685 import Pca9685Driver
+import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-
 from homeassistant.components.number import (
     DEFAULT_MAX_VALUE,
     DEFAULT_MIN_VALUE,
@@ -22,21 +21,26 @@ from homeassistant.const import (
     CONF_NAME,
     CONF_PIN,
 )
-import homeassistant.helpers.config_validation as cv
+from pwmled.driver.pca9685 import Pca9685Driver
 
 from .const import (
+    ATTR_FREQUENCY,
+    ATTR_INVERT,
     CONF_FREQUENCY,
+    CONF_INVERT,
     CONF_NORMALIZE_LOWER,
     CONF_NORMALIZE_UPPER,
     CONF_NUMBERS,
-    CONF_INVERT,
     CONF_STEP,
-    MODE_SLIDER,
-    MODE_BOX,
     MODE_AUTO,
-    ATTR_FREQUENCY,
-    ATTR_INVERT,
+    MODE_BOX,
+    MODE_SLIDER,
 )
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+    from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,7 +78,12 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 )
 
 
-def setup_platform(hass, config, add_entities, discovery_info=None):
+def setup_platform(
+  hass: HomeAssistant,
+  config: ConfigType,
+  add_entities: AddEntitiesCallback,
+  discovery_info: DiscoveryInfoType | None = None # noqa: ARG001
+) -> None:
     """Set up the PWM-output numbers."""
     numbers = []
     for number_conf in config[CONF_NUMBERS]:
@@ -94,7 +103,8 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 class PwmNumber(RestoreNumber):
     """Representation of a simple  PWM output."""
 
-    def __init__(self, hass, config, driver):
+    def __init__(self, hass : HomeAssistant, config : ConfigType,
+                                    driver : Pca9685Driver) -> None:
         """Initialize one-color PWM LED."""
         self._driver = driver
         self._config = config
@@ -105,7 +115,7 @@ class PwmNumber(RestoreNumber):
         self._attr_mode = config[CONF_MODE]
         self._attr_native_value = config[CONF_MINIMUM]
 
-    async def async_added_to_hass(self):
+    async def async_added_to_hass(self) -> None:
         """Handle entity about to be added to hass event."""
         await super().async_added_to_hass()
         if last_data := await self.async_get_last_number_data():
@@ -121,22 +131,22 @@ class PwmNumber(RestoreNumber):
             await self.async_set_native_value(self._config[CONF_MINIMUM])
 
     @property
-    def should_poll(self):
+    def should_poll(self) -> bool:
         """No polling needed."""
         return False
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Return the name of the number."""
         return self._config[CONF_NAME]
 
     @property
-    def frequency(self):
+    def frequency(self) -> int:
         """Return PWM frequency."""
         return self._config[CONF_FREQUENCY]
 
     @property
-    def invert(self):
+    def invert(self) -> bool:
         """Return if output is inverted."""
         return self._config[CONF_INVERT]
 
@@ -169,6 +179,6 @@ class PwmNumber(RestoreNumber):
         # Scale to range of the driver
         scaled_value = int(round((used_value / range_value) * range_pwm))
         # Set value to driver
-        self._driver._set_pwm([scaled_value])  # pylint: disable=protected-access
+        self._driver._set_pwm([scaled_value])  # noqa: SLF001
         self._attr_native_value = value
         self.async_write_ha_state()

@@ -1,13 +1,10 @@
 """Support for LED lights that can be controlled using PWM."""
 import logging
+from typing import ClassVar
 
-from pwmled import Color
-from pwmled.driver.pca9685 import Pca9685Driver
-from pwmled.led import SimpleLed
-from pwmled.led.rgb import RgbLed
-from pwmled.led.rgbw import RgbwLed
+import homeassistant.helpers.config_validation as cv
+import homeassistant.util.color as color_util
 import voluptuous as vol
-
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_HS_COLOR,
@@ -18,18 +15,27 @@ from homeassistant.components.light import (
     LightEntityFeature,
 )
 from homeassistant.const import CONF_ADDRESS, CONF_NAME, STATE_ON
-import homeassistant.helpers.config_validation as cv
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
-import homeassistant.util.color as color_util
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+from pwmled import Color
+from pwmled.driver.pca9685 import Pca9685Driver
+from pwmled.led import SimpleLed
+from pwmled.led.rgb import RgbLed
+from pwmled.led.rgbw import RgbwLed
 
 from .const import (
     CONF_FREQUENCY,
     CONF_LEDS,
     CONF_PINS,
+    CONST_MAX_INTENSITY,
+    CONST_RGB_LED_PINS,
+    CONST_RGBW_LED_PINS,
+    CONST_SIMPLE_LED_PINS,
     DEFAULT_BRIGHTNESS,
     DEFAULT_COLOR,
 )
-
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,9 +56,13 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 )
 
 
-def setup_platform(hass, config, add_entities, discovery_info=None):
+def setup_platform(
+  hass: HomeAssistant, # noqa: ARG001
+  config: ConfigType,
+  add_entities: AddEntitiesCallback,
+  discovery_info: DiscoveryInfoType | None = None # noqa: ARG001
+) -> None:
     """Set up the PWM LED lights."""
-
     leds = []
     for led_conf in config[CONF_LEDS]:
         pins = led_conf[CONF_PINS]
@@ -64,11 +74,11 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
         driver = Pca9685Driver(pins, **opt_args)
 
         name = led_conf[CONF_NAME]
-        if len(pins) == 1:
+        if len(pins) == CONST_SIMPLE_LED_PINS:
             led = PwmSimpleLed(SimpleLed(driver), name)
-        elif len(pins) == 3:
+        elif len(pins) == CONST_RGB_LED_PINS:
             led = PwmRgbLed(RgbLed(driver), name)
-        elif len(pins) == 4:
+        elif len(pins) == CONST_RGBW_LED_PINS:
             led = PwmRgbLed(RgbwLed(driver), name)
         else:
             _LOGGER.error("Invalid led type")
@@ -82,9 +92,9 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
     """Representation of a simple one-color PWM LED."""
 
     _attr_color_mode = ColorMode.BRIGHTNESS
-    _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
+    _attr_supported_color_modes : ClassVar[dict[ColorMode.HS]] = {ColorMode.BRIGHTNESS}
 
-    def __init__(self, led, name):
+    def __init__(self, led: SimpleLed, name: str) -> None:
         """Initialize one-color PWM LED."""
         self._led = led
         self._name = name
@@ -92,7 +102,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
         self._brightness = DEFAULT_BRIGHTNESS
         self._attr_supported_features |= LightEntityFeature.TRANSITION
 
-    async def async_added_to_hass(self):
+    async def async_added_to_hass(self) -> None:
         """Handle entity about to be added to hass event."""
         await super().async_added_to_hass()
         if last_state := await self.async_get_last_state():
@@ -102,26 +112,26 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
             )
 
     @property
-    def should_poll(self):
+    def should_poll(self) -> bool:
         """No polling needed."""
         return False
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Return the name of the group."""
         return self._name
 
     @property
-    def is_on(self):
+    def is_on(self) -> bool:
         """Return true if device is on."""
         return self._is_on
 
     @property
-    def brightness(self):
+    def brightness(self) -> int:
         """Return the brightness property."""
         return self._brightness
 
-    def turn_on(self, **kwargs):
+    def turn_on(self, **kwargs : ConfigType) -> None:
         """Turn on a led."""
         if ATTR_BRIGHTNESS in kwargs:
             self._brightness = kwargs[ATTR_BRIGHTNESS]
@@ -141,7 +151,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
         self._is_on = True
         self.async_write_ha_state()
 
-    def turn_off(self, **kwargs):
+    def turn_off(self, **kwargs : ConfigType) -> None:
         """Turn off a LED."""
         if self.is_on:
             if ATTR_TRANSITION in kwargs:
@@ -158,25 +168,25 @@ class PwmRgbLed(PwmSimpleLed):
     """Representation of a RGB(W) PWM LED."""
 
     _attr_color_mode = ColorMode.HS
-    _attr_supported_color_modes = {ColorMode.HS}
+    _attr_supported_color_modes : ClassVar[dict[ColorMode.HS]] = {ColorMode.HS}
 
-    def __init__(self, led, name):
+    def __init__(self, led: RgbLed | RgbwLed, name: str) -> None:
         """Initialize a RGB(W) PWM LED."""
         super().__init__(led, name)
         self._color = DEFAULT_COLOR
 
-    async def async_added_to_hass(self):
+    async def async_added_to_hass(self) -> None:
         """Handle entity about to be added to hass event."""
         await super().async_added_to_hass()
         if last_state := await self.async_get_last_state():
             self._color = last_state.attributes.get("hs_color", DEFAULT_COLOR)
 
     @property
-    def hs_color(self):
+    def hs_color(self) -> tuple[float, float] | None:
         """Return the color property."""
         return self._color
 
-    def turn_on(self, **kwargs):
+    def turn_on(self, **kwargs : ConfigType ) -> None:
         """Turn on a LED."""
         if ATTR_HS_COLOR in kwargs:
             self._color = kwargs[ATTR_HS_COLOR]
@@ -202,12 +212,12 @@ class PwmRgbLed(PwmSimpleLed):
         self.async_write_ha_state()
 
 
-def _from_hass_brightness(brightness):
+def _from_hass_brightness(brightness: int) -> int:
     """Convert Home Assistant brightness units to percentage."""
-    return brightness / 255
+    return brightness / CONST_MAX_INTENSITY
 
 
-def _from_hass_color(color):
+def _from_hass_color(color: list) -> Color:
     """Convert Home Assistant RGB list to Color tuple."""
     rgb = color_util.color_hs_to_RGB(*color)
     return Color(*tuple(rgb))
