@@ -183,4 +183,4 @@ class PwmNumber(RestoreNumber):
         # Set value to driver
         self._driver._set_pwm([scaled_value])  # noqa: SLF001
         self._attr_native_value = value
-        self.async_write_ha_state()
+        self.schedule_update_ha_state()

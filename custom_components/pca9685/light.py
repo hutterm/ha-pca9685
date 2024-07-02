@@ -150,7 +150,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
             )
 
         self._is_on = True
-        self.async_write_ha_state()
+        self.schedule_update_ha_state()
 
     def turn_off(self, **kwargs: ConfigType) -> None:
         """Turn off a LED."""
@@ -162,7 +162,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
                 self._led.off()
 
         self._is_on = False
-        self.async_write_ha_state()
+        self.schedule_update_ha_state()
 
 
 class PwmRgbLed(PwmSimpleLed):
@@ -210,7 +210,7 @@ class PwmRgbLed(PwmSimpleLed):
             )
 
         self._is_on = True
-        self.async_write_ha_state()
+        self.schedule_update_ha_state()
 
 
 def _from_hass_brightness(brightness: int) -> int:

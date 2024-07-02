@@ -1,0 +1,7 @@
+Found existing installation: pwmled 1.6.11
+Uninstalling pwmled-1.6.11:
+  Would remove:
+    /home/anton/.local/lib/python3.11/site-packages/LICENSE
+    /home/anton/.local/lib/python3.11/site-packages/pwmled-1.6.11.dist-info/*
+    /home/anton/.local/lib/python3.11/site-packages/pwmled/*
+Proceed (Y/n)?   Successfully uninstalled pwmled-1.6.11
