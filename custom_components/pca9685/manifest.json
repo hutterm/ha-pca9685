@@ -2,11 +2,11 @@
     "domain": "pca9685",
     "name": "pca9685 PWM LED",
     "codeowners": [
-        "@antonverburg"
+        "@domectrl"
     ],
-    "documentation": "https://github.com/antonverburg/ha-pca9685",
+    "documentation": "https://github.com/domectrl/ha-pca9685",
     "iot_class": "local_push",
-    "issue_tracker": "https://github.com/antonverburg/ha-pca9685/issues",
+    "issue_tracker": "https://github.com/domectrl/ha-pca9685/issues",
     "requirements": [
         "pwmled-ant==1.6.16",
 	"RPi.GPIO"
