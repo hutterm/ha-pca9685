@@ -79,10 +79,10 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 
 
 def setup_platform(
-  hass: HomeAssistant,
-  config: ConfigType,
-  add_entities: AddEntitiesCallback,
-  discovery_info: DiscoveryInfoType | None = None # noqa: ARG001
+    hass: HomeAssistant,
+    config: ConfigType,
+    add_entities: AddEntitiesCallback,
+    discovery_info: DiscoveryInfoType | None = None,  # noqa: ARG001
 ) -> None:
     """Set up the PWM-output numbers."""
     numbers = []
@@ -103,8 +103,9 @@ def setup_platform(
 class PwmNumber(RestoreNumber):
     """Representation of a simple  PWM output."""
 
-    def __init__(self, hass : HomeAssistant, config : ConfigType,
-                                    driver : Pca9685Driver) -> None:
+    def __init__(
+        self, hass: HomeAssistant, config: ConfigType, driver: Pca9685Driver
+    ) -> None:
         """Initialize one-color PWM LED."""
         self._driver = driver
         self._config = config

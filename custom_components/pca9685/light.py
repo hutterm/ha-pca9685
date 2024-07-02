@@ -57,10 +57,10 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 
 
 def setup_platform(
-  hass: HomeAssistant, # noqa: ARG001
-  config: ConfigType,
-  add_entities: AddEntitiesCallback,
-  discovery_info: DiscoveryInfoType | None = None # noqa: ARG001
+    hass: HomeAssistant,  # noqa: ARG001
+    config: ConfigType,
+    add_entities: AddEntitiesCallback,
+    discovery_info: DiscoveryInfoType | None = None,  # noqa: ARG001
 ) -> None:
     """Set up the PWM LED lights."""
     leds = []
@@ -92,7 +92,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
     """Representation of a simple one-color PWM LED."""
 
     _attr_color_mode = ColorMode.BRIGHTNESS
-    _attr_supported_color_modes : ClassVar[dict[ColorMode.HS]] = {ColorMode.BRIGHTNESS}
+    _attr_supported_color_modes: ClassVar[dict[ColorMode.HS]] = {ColorMode.BRIGHTNESS}
 
     def __init__(self, led: SimpleLed, name: str) -> None:
         """Initialize one-color PWM LED."""
@@ -131,7 +131,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
         """Return the brightness property."""
         return self._brightness
 
-    def turn_on(self, **kwargs : ConfigType) -> None:
+    def turn_on(self, **kwargs: ConfigType) -> None:
         """Turn on a led."""
         if ATTR_BRIGHTNESS in kwargs:
             self._brightness = kwargs[ATTR_BRIGHTNESS]
@@ -151,7 +151,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
         self._is_on = True
         self.async_write_ha_state()
 
-    def turn_off(self, **kwargs : ConfigType) -> None:
+    def turn_off(self, **kwargs: ConfigType) -> None:
         """Turn off a LED."""
         if self.is_on:
             if ATTR_TRANSITION in kwargs:
@@ -168,7 +168,7 @@ class PwmRgbLed(PwmSimpleLed):
     """Representation of a RGB(W) PWM LED."""
 
     _attr_color_mode = ColorMode.HS
-    _attr_supported_color_modes : ClassVar[dict[ColorMode.HS]] = {ColorMode.HS}
+    _attr_supported_color_modes: ClassVar[dict[ColorMode.HS]] = {ColorMode.HS}
 
     def __init__(self, led: RgbLed | RgbwLed, name: str) -> None:
         """Initialize a RGB(W) PWM LED."""
@@ -186,7 +186,7 @@ class PwmRgbLed(PwmSimpleLed):
         """Return the color property."""
         return self._color
 
-    def turn_on(self, **kwargs : ConfigType ) -> None:
+    def turn_on(self, **kwargs: ConfigType) -> None:
         """Turn on a LED."""
         if ATTR_HS_COLOR in kwargs:
             self._color = kwargs[ATTR_HS_COLOR]
