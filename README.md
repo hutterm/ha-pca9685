@@ -57,6 +57,7 @@ light:
   - platform: pca9685
     leds:
       - name: Lightstrip Cupboard
+        unique_id: lightstrip_cupboard
         pins: 10
 
 number:
@@ -81,6 +82,8 @@ number:
   > required: true | type: map
 - pins: The pins connected to the LED as a list. For single LED, assign one integer, for RGB assign 3 integers, for RGBW assign 4. Numbering starts from 0 up to 15.
   > required: true | type: [int]
+- unique_id: The unique ID of the light.
+  > required: true | type: string
 
 ***number specific settings:***
 - numbers: List of the numbers.
@@ -102,15 +105,18 @@ number:
 
 ```yaml
 light:
-- platform: pca9685
+  - platform: pca9685
     leds:
       - name: Lightstrip Simple
+        unique_id: lightstrip_simple
         pins: 10
         address: 65
       - name: Lightstrip RGB
+        unique_id: lightstrip_rgb
         pins: [2,5,9]
         address: 65
       - name: Lightstrip RGBW
+        unique_id: lightstrip_rgbw
         pins: [1,2,4,6]
         address: 65
 
