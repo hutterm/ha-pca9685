@@ -83,7 +83,7 @@ number:
 - pins: The pins connected to the LED as a list. For single LED, assign one integer, for RGB assign 3 integers, for RGBW assign 4. Numbering starts from 0 up to 15.
   > required: true | type: [int]
 - unique_id: The unique ID of the light.
-  > required: true | type: string
+  > required: false | default: None | type: string
 
 ***number specific settings:***
 - numbers: List of the numbers.

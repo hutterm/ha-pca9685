@@ -47,7 +47,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
             [
                 {
                     vol.Required(CONF_NAME): cv.string,
-                    vol.Required(CONF_UNIQUE_ID): cv.string,
+                    vol.Optional(CONF_UNIQUE_ID): cv.string,
                     vol.Required(CONF_PINS): vol.All(cv.ensure_list, [cv.positive_int]),
                     vol.Optional(CONF_FREQUENCY): cv.positive_int,
                     vol.Optional(CONF_ADDRESS): cv.byte,
@@ -76,7 +76,7 @@ def setup_platform(
         driver = Pca9685Driver(pins, **opt_args)
 
         name = led_conf[CONF_NAME]
-        unique_id = led_conf[CONF_UNIQUE_ID]
+        unique_id = led_conf.get(CONF_UNIQUE_ID, None)
         if len(pins) == CONST_SIMPLE_LED_PINS:
             led = PwmSimpleLed(SimpleLed(driver), name, unique_id)
         elif len(pins) == CONST_RGB_LED_PINS:
@@ -97,7 +97,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
     _attr_color_mode = ColorMode.BRIGHTNESS
     _attr_supported_color_modes: ClassVar[dict[ColorMode.HS]] = {ColorMode.BRIGHTNESS}
 
-    def __init__(self, led: SimpleLed, name: str, unique_id: str) -> None:
+    def __init__(self, led: SimpleLed, name: str, unique_id: str | None = None) -> None:
         """Initialize one-color PWM LED."""
         self._led = led
         self._attr_name = name
@@ -134,8 +134,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
             )
         else:
             self._led.set(
-                is_on=True,
-                brightness=_from_hass_brightness(self._attr_brightness)
+                is_on=True, brightness=_from_hass_brightness(self._attr_brightness)
             )
 
         self._attr_is_on = True
@@ -161,7 +160,9 @@ class PwmRgbLed(PwmSimpleLed):
     _attr_color_mode = ColorMode.HS
     _attr_supported_color_modes: ClassVar[dict[ColorMode.HS]] = {ColorMode.HS}
 
-    def __init__(self, led: RgbLed | RgbwLed, name: str, unique_id: str) -> None:
+    def __init__(
+        self, led: RgbLed | RgbwLed, name: str, unique_id: str | None = None
+    ) -> None:
         """Initialize a RGB(W) PWM LED."""
         super().__init__(led, name, unique_id)
         self._attr_hs_color = DEFAULT_COLOR
