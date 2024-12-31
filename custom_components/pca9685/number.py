@@ -163,10 +163,8 @@ class PwmNumber(RestoreNumber):
     async def async_set_native_value(self, value: float) -> None:
         """Set new value."""
         # Clip value to limits (don't know if this is required?)
-        if value < self._config[CONF_MINIMUM]:
-            value = self._config[CONF_MINIMUM]
-        if value > self._config[CONF_MAXIMUM]:
-            value = self._config[CONF_MAXIMUM]
+        value = max(value, self._config[CONF_MINIMUM])
+        value = min(value, self._config[CONF_MAXIMUM])
 
         # In case the invert bit is on, invert the value
         used_value = value
