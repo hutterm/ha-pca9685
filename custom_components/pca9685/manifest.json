@@ -4,12 +4,12 @@
     "codeowners": [
         "@domectrl"
     ],
+    "config_flow": true,
     "documentation": "https://github.com/domectrl/ha-pca9685",
     "iot_class": "local_push",
     "issue_tracker": "https://github.com/domectrl/ha-pca9685/issues",
     "requirements": [
         "smbus3>=0.5.5"
     ],
-    "version": "0.9.1",
-    "config_flow": true
+    "version": "0.9.1"
 }
