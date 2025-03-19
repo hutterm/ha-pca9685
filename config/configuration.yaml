@@ -8,31 +8,31 @@ logger:
     custom_components.pca9685: debug
 
 
-light:
-  - platform: pca9685
-    leds:
-      - name: Lightstrip Simple
-        unique_id: lightstrip_simple
-        pins: 10
-        address: 65
-      - name: Lightstrip RGB
-        unique_id: lightstrip_rgb
-        pins: [2,5,9]
-        address: 65
-      - name: Lightstrip RGBW
-        unique_id: lightstrip_rgbw
-        pins: [1,2,4,6]
-        address: 65
+# light:
+#   - platform: pca9685
+#     leds:
+#       - name: Lightstrip Simple
+#         unique_id: lightstrip_simple
+#         pins: 10
+#         address: 65
+#       - name: Lightstrip RGB
+#         unique_id: lightstrip_rgb
+#         pins: [2,5,9]
+#         address: 65
+#       - name: Lightstrip RGBW
+#         unique_id: lightstrip_rgbw
+#         pins: [1,2,4,6]
+#         address: 65
 
-number:
-  - platform: pca9685
-    numbers:
-      - name: Test number
-        pin: 12
-        frequency: 1000
-        invert: true
-        minimum: 11
-        maximum: 89
-        normalize_lower: -20
-        normalize_upper: 120
-        address: 65
+# number:
+#   - platform: pca9685
+#     numbers:
+#       - name: Test number
+#         pin: 12
+#         frequency: 1000
+#         invert: true
+#         minimum: 11
+#         maximum: 89
+#         normalize_lower: -20
+#         normalize_upper: 120
+#         address: 65

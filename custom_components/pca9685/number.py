@@ -21,8 +21,11 @@ from homeassistant.const import (
     CONF_MODE,
     CONF_NAME,
     CONF_PIN,
+    CONF_TYPE,
+    CONF_UNIQUE_ID,
+    Platform,
 )
-from pwmled.driver.pca9685 import Pca9685Driver
+from .pca_driver import PCA9685Driver
 
 from .const import (
     ATTR_FREQUENCY,
@@ -36,81 +39,50 @@ from .const import (
     MODE_AUTO,
     MODE_BOX,
     MODE_SLIDER,
+    DOMAIN,
+    PCA9685_DRIVERS,
 )
 
-if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
-    from homeassistant.helpers.entity_platform import AddEntitiesCallback
-    from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+# if TYPE_CHECKING:
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_NUMBERS): vol.All(
-            cv.ensure_list,
-            [
-                {
-                    vol.Required(CONF_NAME): cv.string,
-                    vol.Required(CONF_PIN): cv.positive_int,
-                    vol.Optional(CONF_INVERT, default=False): cv.boolean,
-                    vol.Optional(CONF_FREQUENCY): cv.positive_int,
-                    vol.Optional(CONF_ADDRESS): cv.byte,
-                    vol.Optional(CONF_MINIMUM, default=DEFAULT_MIN_VALUE): vol.Coerce(
-                        float
-                    ),
-                    vol.Optional(CONF_MAXIMUM, default=DEFAULT_MAX_VALUE): vol.Coerce(
-                        float
-                    ),
-                    vol.Optional(
-                        CONF_NORMALIZE_LOWER, default=DEFAULT_MIN_VALUE
-                    ): vol.Coerce(float),
-                    vol.Optional(
-                        CONF_NORMALIZE_UPPER, default=DEFAULT_MAX_VALUE
-                    ): vol.Coerce(float),
-                    vol.Optional(CONF_STEP, default=DEFAULT_STEP): cv.positive_float,
-                    vol.Optional(CONF_MODE, default=MODE_SLIDER): vol.In(
-                        [MODE_BOX, MODE_SLIDER, MODE_AUTO]
-                    ),
-                }
-            ],
-        )
-    }
-)
 
-
-def setup_platform(
+async def async_setup_entry(
     hass: HomeAssistant,
-    config: ConfigType,
-    add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,  # noqa: ARG001
+    config_entry: ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the PWM-output numbers."""
-    numbers = []
-    for number_conf in config[CONF_NUMBERS]:
-        pin = number_conf[CONF_PIN]
-        opt_args = {}
-        if CONF_FREQUENCY in number_conf:
-            opt_args["freq"] = number_conf[CONF_FREQUENCY]
-        if CONF_ADDRESS in number_conf:
-            opt_args["address"] = number_conf[CONF_ADDRESS]
-        driver = Pca9685Driver([pin], **opt_args)
-        number = PwmNumber(hass, number_conf, driver)
-        numbers.append(number)
+    """Set up this platform for a specific ConfigEntry(==PCA9685 device)."""
+    pca_driver: PCA9685Driver = hass.data[DOMAIN][PCA9685_DRIVERS][
+        config_entry.entry_id
+    ]
 
-    add_entities(numbers)
+    entities = []
+    for entity in config_entry.data["entities"]:
+        if entity[CONF_TYPE] == Platform.NUMBER:
+            entities.append(
+                PwmNumber(
+                    config=entity,
+                    driver=pca_driver,
+                )
+            )
+    if len(entities):
+        async_add_entities(entities)
 
 
 class PwmNumber(RestoreNumber):
     """Representation of a simple  PWM output."""
 
-    def __init__(
-        self, hass: HomeAssistant, config: ConfigType, driver: Pca9685Driver
-    ) -> None:
+    def __init__(self, config: ConfigType, driver: PCA9685Driver) -> None:
         """Initialize one-color PWM LED."""
         self._driver = driver
         self._config = config
-        self._hass = hass
         self._attr_native_min_value = config[CONF_MINIMUM]
         self._attr_native_max_value = config[CONF_MAXIMUM]
         self._attr_native_step = config[CONF_STEP]
@@ -145,7 +117,7 @@ class PwmNumber(RestoreNumber):
     @property
     def frequency(self) -> int:
         """Return PWM frequency."""
-        return self._config[CONF_FREQUENCY]
+        return self._driver.get_pwm_frequency()
 
     @property
     def invert(self) -> bool:
@@ -170,15 +142,19 @@ class PwmNumber(RestoreNumber):
         used_value = value
         if self._config[CONF_INVERT]:
             used_value = self._config[CONF_NORMALIZE_UPPER] - value
-
+        used_value -= self._config[CONF_NORMALIZE_LOWER]
         # Scale range from N_L..N_U to 0..65535 (pca9685)
-        range_pwm = 65535.0
+        range_pwm = 4095
         range_value = (
             self._config[CONF_NORMALIZE_UPPER] - self._config[CONF_NORMALIZE_LOWER]
         )
+
         # Scale to range of the driver
         scaled_value = int(round((used_value / range_value) * range_pwm))
+        # Make sure it will fit in the 12-bits range of the pca9685
+        scaled_value = min(range_pwm, scaled_value)
+        scaled_value = max(0, scaled_value)
         # Set value to driver
-        self._driver._set_pwm([scaled_value])  # noqa: SLF001
+        self._driver.set_pwm(led_num=self._config[CONF_PIN], value=scaled_value)
         self._attr_native_value = value
         self.schedule_update_ha_state()

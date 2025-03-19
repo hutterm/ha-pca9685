@@ -1,8 +1,6 @@
 colorlog==6.9.0
-homeassistant==2024.6.0
+homeassistant==2025.3.1
 pip>=21.3.1
-ruff==0.8.4
-pwmled==1.6.11
-RPi.GPIO
-
+ruff==0.9.9
+smbus3>=0.5.5
 
