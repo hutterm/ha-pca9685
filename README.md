@@ -1,6 +1,6 @@
 # Home Assistant PCA9685 PWM custom integration
 
-**This is a spin-off from an original Home Assistant integration which was removed in Home Assistant Core 2022.4. The original rpi_gpi_pwm was stored [here](https://github.com/RedMeKool/HA-Raspberry-pi-GPIO-PWM/) but due to changes in 2022.7.5 support for pca9685 PWM devices was dropped. This module brings back  support for the pca9685 PWM LED driver in a separate component.**
+**This is a spin-off from an original Home Assistant integration which was removed in Home Assistant Core 2022.4. The original rpi_gpi_pwm was stored [here](https://github.com/RedMeKool/HA-Raspberry-pi-GPIO-PWM/) but due to changes in 2022.7.5 support for pca9685 PWM devices was dropped. This module brings back  support for the pca9685 PWM LED driver in a separate component. As of Home Assitant version 2024.10.4 we also implemented an own driver to prevent upgrading users from dependency issues.**
 
 [![GitHub Release][releases-shield]][releases]
 [![GitHub Activity][commits-shield]][commits]
@@ -44,96 +44,52 @@ Platform | Description
 1. Restart Home Assistant
 
 ## Configuration via user interface:
-* Configuration via user interface is not yet supported
+* In the user interface go to "Configuration" -> "Integrations" click "+" and search for "PCA9685"
+* For a description of the configuration parameters, see Configuration parameters
 
 ## YAML Configuration
 
-This integration can be configured and set up manually via YAML. To enable the light or number in your installation, add the following to your `configuration.yaml` file:
-
-```yaml
-# Example configuration.yaml entry
-
-light:
-  - platform: pca9685
-    leds:
-      - name: Lightstrip Cupboard
-        unique_id: lightstrip_cupboard
-        pins: 10
-
-number:
-  - platform: pca9685
-    numbers:
-      - name: Test number
-        pin: 12
-```
-
+This integration can no longer be configured via YAML. Use the config flow function instead. 
 ### Configuration parameters
 
 ***Generic settings:***
-- name: Name of the LED.
-  > required: true | type: string
+- I2C bus: Select the I2C bus where the PCA9685 is connected. Use tools like i2cdetect to find the right bus.
+  > default: first bus found in the system
+- I2C address: I2C address of the LED driver
+  > default: 0x40 (decimal 65)
 - frequency: The PWM frequency. 
-  > required: false | type: int
-- address: I2C address of the LED driver
-  > required: false | default: 0x40 | type: int
+  > default: 200 Hz
+
+***Choosing entities:***
+In the next menu, one can choose what entities to add. The possible entities shown depend on the amount of pins left without a function. If all pins are occupied, or if the user presses the 'Finish' button, the integration will be added.
 
 ***Light specific settings:***
-- leds: List of LEDs.
-  > required: true | type: map
-- pins: The pins connected to the LED as a list. For single LED, assign one integer, for RGB assign 3 integers, for RGBW assign 4. Numbering starts from 0 up to 15.
-  > required: true | type: [int]
-- unique_id: The unique ID of the light.
-  > required: false | default: None | type: string
+- name: Name of the Light to create.
+  > default: empty 
+- pin(s): Select the pins to be used for your entity. 
+  Note that the numbering of the pins starts from 0 up to 15. Only the pins not yet occupied by other entities can be selected.
+  > default: first / next pin available
 
 ***number specific settings:***
-- numbers: List of the numbers.
-  > required: true | type: map
+- name: Name of the Number to create.
+  > default: empty 
 - pin: The pin connected to the number. Numbering starts from 0 up to 15.
-  > required: true | type: int
-- invert: Invert signal of the PWM generator (only available for the number platform)
-  > required: false | default: false | type: boolean
-- minimum: Minimal (clipping) value of the number.
-  > required: false | default: 0 | type: float
-- maximum: Maximal (clipping) value of the number. 
-  > required: false| default: 100 | type: float
-- normalize_lower: Lower value to normalize the output of the PWM signal on.
-  > required: false | default: 0 | type: float
+  > default: first / next pin available
+- invert: Invert signal of the PWM generator
+  > default: false
+- minimum: Minimal value of the number.
+  > default: 0
+- maximum: Maximal value of the number. 
+  > default: 100
+- normalize_lower: Lower value to normalize the output of the PWM signal on. 
+  > default: 0
 - normalize_upper: Upper value to normalize the output of the PWM output on.
-  > required: false | default: 100 | type: float
+  > default: 100
 
-### Full configuration example
-
-```yaml
-light:
-  - platform: pca9685
-    leds:
-      - name: Lightstrip Simple
-        unique_id: lightstrip_simple
-        pins: 10
-        address: 65
-      - name: Lightstrip RGB
-        unique_id: lightstrip_rgb
-        pins: [2,5,9]
-        address: 65
-      - name: Lightstrip RGBW
-        unique_id: lightstrip_rgbw
-        pins: [1,2,4,6]
-        address: 65
-
-number:
-  - platform: pca9685
-    numbers:
-      - name: Test number
-        pin: 12
-        frequency: 1000
-        invert: true
-        minimum: 11.5
-        maximum: 75.7
-        normalize_lower: -10.8
-        normalize_upper: 200.5
-        address: 65
-
-```
+These last four parameters might require a little more explanation:
+- The minimum/maximum define the range one can select on this number, for example 0..100%.
+- The 'normalize' parameters define at what range the output of the PWM normalizes. The PCA9685 registers can be programmed with a range of 0..4095. In normal cases, the the output register of the PCA9685 is set to 0 for value 0, and 4095 for value 100. If the normalize value is for example to 10..60, it will set the register value 0 for each value <10. Above 10, it will start raising the register, up to 4095 for value 60. Above 60, the register value will remain 4095.
+- Using a negative value for the normalize_lower parameter, will clip the output to the register. This way, someone can assure that the value of the register will be always for larger than, for example, 10%. Using a larger-than-maximum value will clip the output to the register on the upper side.
 
 ## Contributions are welcome!
 
