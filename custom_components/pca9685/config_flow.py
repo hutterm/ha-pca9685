@@ -1,62 +1,59 @@
 """Config flow definition for PCA9685."""
 
 import logging
-from typing import Any, Dict, Optional, ClassVar
 from pathlib import Path
+from typing import Any, ClassVar
 
 import voluptuous as vol
 from homeassistant.components.light import ColorMode
-from homeassistant.config_entries import (
-    ConfigFlow,
-    ConfigFlowResult,
-)
-
-import homeassistant.helpers.config_validation as cv
-from homeassistant.const import CONF_NAME, CONF_UNIQUE_ID
-from homeassistant.helpers import selector
-
-from homeassistant.const import (
-    CONF_ENTITIES,
-    CONF_TYPE,
-    CONF_MINIMUM,
-    CONF_MAXIMUM,
-    CONF_MODE,
-    Platform,
-)
-
 from homeassistant.components.number import (
     DEFAULT_MAX_VALUE,
     DEFAULT_MIN_VALUE,
     DEFAULT_STEP,
 )
-
+from homeassistant.config_entries import (
+    ConfigFlow,
+    ConfigFlowResult,
+)
+from homeassistant.const import (
+    CONF_ENTITIES,
+    CONF_MAXIMUM,
+    CONF_MINIMUM,
+    CONF_MODE,
+    CONF_NAME,
+    CONF_TYPE,
+    CONF_UNIQUE_ID,
+    Platform,
+)
+from homeassistant.helpers import selector
 
 from .const import (
-    CONF_BUS,
     CONF_ADDR,
-    CONF_PIN,
-    CONF_PIN_RED,
-    CONF_PIN_GREEN,
-    CONF_PIN_BLUE,
-    CONF_PIN_WHITE,
+    CONF_BUS,
     CONF_FREQUENCY,
     CONF_INVERT,
+    CONF_NORMALIZE_LOWER,
+    CONF_NORMALIZE_UPPER,
+    CONF_PIN,
+    CONF_PIN_BLUE,
+    CONF_PIN_GREEN,
+    CONF_PIN_RED,
+    CONF_PIN_WHITE,
+    CONF_STEP,
+    CONST_ADDR_MAX,
+    CONST_ADDR_MIN,
+    CONST_PWM_FREQ_MAX,
+    CONST_PWM_FREQ_MIN,
+    CONST_RGB_LED_PINS,
+    CONST_RGBW_LED_PINS,
+    CONST_SIMPLE_LED_PINS,
     DEFAULT_ADDR,
     DEFAULT_FREQ,
     DOMAIN,
-    CONF_ADDR,
-    CONST_ADDR_MIN,
-    CONST_ADDR_MAX,
-    CONST_PWM_FREQ_MIN,
-    CONST_PWM_FREQ_MAX,
-    CONF_NORMALIZE_LOWER,
-    CONF_NORMALIZE_UPPER,
-    CONF_STEP,
-    MODE_SLIDER,
-    MODE_BOX,
     MODE_AUTO,
+    MODE_BOX,
+    MODE_SLIDER,
 )
-
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,10 +63,10 @@ class PCA9685ConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
     _available_pins: ClassVar[list[int]] = list(range(16))
-    config_data = {}
+    config_data: ClassVar[dict[str, Any]] = {}
 
     async def async_step_user(
-        self, user_input: Optional[Dict[str, Any]] = None
+        self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Invoke when a user initiates a flow via the user interface."""
         if user_input and user_input.get(CONF_BUS):
@@ -137,9 +134,11 @@ class PCA9685ConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_show_entity_menu(
-        self, user_input: Optional[Dict[str, Any]] = None
+        self,
+        user_input: dict[str, Any] | None = None,  # noqa: ARG002
     ) -> ConfigFlowResult:
-        # We know the information about the bus, now we have to define the lights & numbers
+        """Show menu to configure entities."""
+        # We know the about the bus, now we have to define the lights & numbers
         pins = len(self._available_pins)
         if pins == 0:
             return self.async_create_entry(
@@ -152,12 +151,12 @@ class PCA9685ConfigFlow(ConfigFlow, domain=DOMAIN):
             )
 
         options = {}
-        if pins >= 1:
+        if pins >= CONST_SIMPLE_LED_PINS:
             options["add_light_brightness"] = "Add a simple single-color LED"
             options["add_number_brightness"] = "Add a PWM controllable Number"
-        if pins >= 3:
+        if pins >= CONST_RGB_LED_PINS:
             options["add_light_rgb"] = "Add a RGB LED"
-        if pins >= 4:
+        if pins >= CONST_RGBW_LED_PINS:
             options["add_light_rgbw"] = "Add a RGBW LED"
 
         options["ready"] = "Finish"
@@ -207,7 +206,7 @@ class PCA9685ConfigFlow(ConfigFlow, domain=DOMAIN):
             for pin in self._available_pins
         ]
         cfg_scheme = {}
-        if color == ColorMode.BRIGHTNESS or entity_type == Platform.NUMBER:
+        if color == ColorMode.BRIGHTNESS:
             cfg_scheme = vol.Schema(
                 {
                     vol.Required(CONF_NAME): selector.TextSelector(),
@@ -218,68 +217,6 @@ class PCA9685ConfigFlow(ConfigFlow, domain=DOMAIN):
                     ),
                 }
             )
-            _LOGGER.debug("In right menu....")
-            if entity_type == Platform.NUMBER:
-                _LOGGER.debug("In right menu2....")
-                cfg_scheme = cfg_scheme.extend(
-                    {
-                        vol.Optional(
-                            CONF_INVERT, default=False
-                        ): selector.BooleanSelector(),
-                        vol.Optional(
-                            CONF_MINIMUM, default=DEFAULT_MIN_VALUE
-                        ): selector.NumberSelector(
-                            selector.NumberSelectorConfig(
-                                mode=selector.NumberSelectorMode.BOX
-                            )
-                        ),
-                        vol.Optional(
-                            CONF_MAXIMUM, default=DEFAULT_MAX_VALUE
-                        ): selector.NumberSelector(
-                            selector.NumberSelectorConfig(
-                                mode=selector.NumberSelectorMode.BOX
-                            )
-                        ),
-                        vol.Optional(
-                            CONF_NORMALIZE_LOWER, default=DEFAULT_MIN_VALUE
-                        ): selector.NumberSelector(
-                            selector.NumberSelectorConfig(
-                                mode=selector.NumberSelectorMode.BOX
-                            )
-                        ),
-                        vol.Optional(
-                            CONF_NORMALIZE_UPPER, default=DEFAULT_MAX_VALUE
-                        ): selector.NumberSelector(
-                            selector.NumberSelectorConfig(
-                                mode=selector.NumberSelectorMode.BOX
-                            )
-                        ),
-                        vol.Optional(
-                            CONF_STEP, default=DEFAULT_STEP
-                        ): selector.NumberSelector(
-                            selector.NumberSelectorConfig(
-                                min=0, mode=selector.NumberSelectorMode.BOX
-                            )
-                        ),
-                        vol.Optional(
-                            CONF_MODE, default=MODE_SLIDER
-                        ): selector.SelectSelector(
-                            selector.SelectSelectorConfig(
-                                options=[
-                                    selector.SelectOptionDict(
-                                        value=MODE_BOX, label=MODE_BOX
-                                    ),
-                                    selector.SelectOptionDict(
-                                        value=MODE_SLIDER, label=MODE_SLIDER
-                                    ),
-                                    selector.SelectOptionDict(
-                                        value=MODE_AUTO, label=MODE_AUTO
-                                    ),
-                                ]
-                            )
-                        ),
-                    }
-                )
         else:
             cfg_scheme = vol.Schema(
                 {
@@ -301,16 +238,76 @@ class PCA9685ConfigFlow(ConfigFlow, domain=DOMAIN):
                     ),
                 }
             )
-            if color == ColorMode.RGBW:
-                cfg_scheme = cfg_scheme.extend(
-                    {
-                        vol.Required(
-                            CONF_PIN_WHITE, default=str(self._available_pins[3])
-                        ): selector.SelectSelector(
-                            selector.SelectSelectorConfig(options=pin_selector),
-                        ),
-                    }
-                )
+        if entity_type == Platform.NUMBER:
+            cfg_scheme = cfg_scheme.extend(
+                {
+                    vol.Optional(
+                        CONF_INVERT, default=False
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        CONF_MINIMUM, default=DEFAULT_MIN_VALUE
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            mode=selector.NumberSelectorMode.BOX
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_MAXIMUM, default=DEFAULT_MAX_VALUE
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            mode=selector.NumberSelectorMode.BOX
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_NORMALIZE_LOWER, default=DEFAULT_MIN_VALUE
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            mode=selector.NumberSelectorMode.BOX
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_NORMALIZE_UPPER, default=DEFAULT_MAX_VALUE
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            mode=selector.NumberSelectorMode.BOX
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_STEP, default=DEFAULT_STEP
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0, mode=selector.NumberSelectorMode.BOX
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_MODE, default=MODE_SLIDER
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(
+                                    value=MODE_BOX, label=MODE_BOX
+                                ),
+                                selector.SelectOptionDict(
+                                    value=MODE_SLIDER, label=MODE_SLIDER
+                                ),
+                                selector.SelectOptionDict(
+                                    value=MODE_AUTO, label=MODE_AUTO
+                                ),
+                            ]
+                        )
+                    ),
+                }
+            )
+        if color == ColorMode.RGBW:
+            cfg_scheme = cfg_scheme.extend(
+                {
+                    vol.Required(
+                        CONF_PIN_WHITE, default=str(self._available_pins[3])
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=pin_selector),
+                    ),
+                }
+            )
 
         if user_input is None:
             return self.async_show_form(
@@ -329,20 +326,7 @@ class PCA9685ConfigFlow(ConfigFlow, domain=DOMAIN):
         )
         if color != ColorMode.BRIGHTNESS:
             # Check if not selected equal pin numbers
-            err = {}
-            if user_input[CONF_PIN_RED] == user_input[CONF_PIN_GREEN]:
-                err[CONF_PIN_GREEN] = "Green light uses same pin number as red light!"
-            if user_input[CONF_PIN_RED] == user_input[CONF_PIN_BLUE]:
-                err[CONF_PIN_BLUE] = "Blue light uses same pin number as red light!"
-            if user_input[CONF_PIN_GREEN] == user_input[CONF_PIN_BLUE]:
-                err[CONF_PIN_GREEN] = "Blue light uses same pin number as green light!"
-            if user_input.get(CONF_PIN_WHITE):
-                if user_input[CONF_PIN_RED] == user_input[CONF_PIN_WHITE]:
-                    err[CONF_PIN_RED] = "White light uses same number as red light!"
-                if user_input[CONF_PIN_GREEN] == user_input[CONF_PIN_WHITE]:
-                    err[CONF_PIN_GREEN] = "White light uses same number as green light!"
-                if user_input[CONF_PIN_BLUE] == user_input[CONF_PIN_WHITE]:
-                    err[CONF_PIN_BLUE] = "White light uses same number as blue light!"
+            err = self._check_pin_conflicts(user_input)
 
             if len(err):
                 return self.async_show_form(
@@ -379,8 +363,27 @@ class PCA9685ConfigFlow(ConfigFlow, domain=DOMAIN):
         self.config_data[CONF_ENTITIES].append(user_input)
         return await self.async_show_entity_menu(user_input=user_input)
 
+    def _check_pin_conflicts(self, user_input: dict[str, str]) -> dict[str, str]:
+        """Check for conflicting pins."""
+        err = {}
+        if user_input[CONF_PIN_RED] == user_input[CONF_PIN_GREEN]:
+            err[CONF_PIN_GREEN] = "Green light uses same pin number as red light!"
+        if user_input[CONF_PIN_RED] == user_input[CONF_PIN_BLUE]:
+            err[CONF_PIN_BLUE] = "Blue light uses same pin number as red light!"
+        if user_input[CONF_PIN_GREEN] == user_input[CONF_PIN_BLUE]:
+            err[CONF_PIN_GREEN] = "Blue light uses same pin number as green light!"
+        if user_input.get(CONF_PIN_WHITE):
+            if user_input[CONF_PIN_RED] == user_input[CONF_PIN_WHITE]:
+                err[CONF_PIN_RED] = "White light uses same number as red light!"
+            if user_input[CONF_PIN_GREEN] == user_input[CONF_PIN_WHITE]:
+                err[CONF_PIN_GREEN] = "White light uses same number as green light!"
+            if user_input[CONF_PIN_BLUE] == user_input[CONF_PIN_WHITE]:
+                err[CONF_PIN_BLUE] = "White light uses same number as blue light!"
+        return err
+
     async def async_step_ready(
-        self, user_input: dict[str, Any] | None = None
+        self,
+        user_input: dict[str, Any] | None = None,  # noqa: ARG002
     ) -> ConfigFlowResult:
         """Ready selecting outputs."""
         # User tells: config is ready, create entry now

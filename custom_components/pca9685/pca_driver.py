@@ -4,8 +4,10 @@ import logging
 import re
 from pathlib import Path
 from types import MappingProxyType
-from .const import CONST_PWM_FREQ_MIN, CONST_PWM_FREQ_MAX
+
 from smbus3 import SMBus
+
+from .const import CONST_PWM_FREQ_MAX, CONST_PWM_FREQ_MIN
 
 _LOGGER = logging.getLogger(__name__)
 

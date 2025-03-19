@@ -1,21 +1,11 @@
 """Support for LED lights that can be controlled using PWM."""
 
 import logging
-from tracemalloc import start
-
+from datetime import timedelta
 from typing import ClassVar
 
 import homeassistant.util.color as color_util
-from numpy import isin
-import voluptuous as vol
-from datetime import timedelta
-
-from homeassistant.const import CONF_TYPE, CONF_UNIQUE_ID, Platform
-
 import homeassistant.util.dt as dt_util
-from homeassistant.util import color as color_util
-
-
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_HS_COLOR,
@@ -24,36 +14,36 @@ from homeassistant.components.light import (
     LightEntity,
     LightEntityFeature,
 )
-from homeassistant.const import CONF_ADDRESS, CONF_NAME, CONF_UNIQUE_ID, STATE_ON
-from homeassistant.core import HomeAssistant, CALLBACK_TYPE, callback
-from homeassistant.helpers.restore_state import RestoreEntity
-from homeassistant.helpers.typing import ConfigType
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (
+    CONF_NAME,
+    CONF_TYPE,
+    CONF_UNIQUE_ID,
+    STATE_ON,
+    Platform,
+)
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import (
     async_track_time_interval,
 )
-from homeassistant.config_entries import ConfigEntry
-from .pca_driver import PCA9685Driver
-
-from custom_components.pca9685.pca_driver import PCA9685Driver
-
-from collections import namedtuple
-
-
-Color = namedtuple("Color", "R G B")
+from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.typing import ConfigType
 
 from .const import (
-    DOMAIN,
     CONF_PIN,
-    CONF_PIN_RED,
-    CONF_PIN_GREEN,
     CONF_PIN_BLUE,
+    CONF_PIN_GREEN,
+    CONF_PIN_RED,
     CONF_PIN_WHITE,
     CONST_PCA_INT_MULTIPLIER,
+    CONST_RGBW_LED_PINS,
     DEFAULT_BRIGHTNESS,
     DEFAULT_COLOR,
+    DOMAIN,
     PCA9685_DRIVERS,
 )
+from .pca_driver import PCA9685Driver
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -100,7 +90,6 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
     """Representation of a simple one-color PWM LED."""
 
     _attr_color_mode = ColorMode.BRIGHTNESS
-    _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
 
     def __init__(
         self,
@@ -125,6 +114,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
         self._transition_end = self._transition_start
         self._transition_begin_brightness: int = 0
         self._transition_end_brightness: int = 0
+        self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
 
     async def async_added_to_hass(self) -> None:
         """Handle entity about to be added to hass event."""
@@ -178,7 +168,6 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
     ) -> None:
         """Start light transitio."""
         # First check if a transition was in progress; in that case stop it.
-        self._transition_in_progress = False
         if self._transition_lister:
             self._transition_lister()
         # initialize relevant values
@@ -193,7 +182,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
             )
 
     @callback
-    async def _async_step_transition(self, args=None) -> None:
+    async def _async_step_transition(self, args: None = None) -> None:  # noqa: ARG002
         """Cycle for transition of output."""
         # Calculate switch off time, and if in the future, add a lister to hass
         now = dt_util.utcnow()
@@ -230,7 +219,7 @@ class PwmRgbwLed(PwmSimpleLed):
     _attr_color_mode = ColorMode.HS
     _attr_supported_color_modes: ClassVar[dict[ColorMode.HS]] = {ColorMode.HS}
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         driver: PCA9685Driver,
         pin_red: int,
@@ -244,7 +233,7 @@ class PwmRgbwLed(PwmSimpleLed):
         super().__init__(driver=driver, name=name, unique_id=unique_id)
         self._attr_hs_color = DEFAULT_COLOR
         self._pins: list[int] = [pin_red, pin_green, pin_blue]
-        if pin_white != None:
+        if pin_white is not None:
             self._pins.append(pin_white)
         self._transition_begin_brightness: list[int] = []
         self._transition_end_brightness: list[int] = []
@@ -264,7 +253,7 @@ class PwmRgbwLed(PwmSimpleLed):
             self._attr_brightness = kwargs[ATTR_BRIGHTNESS]
 
         color = list(color_util.color_hs_to_RGB(*self._attr_hs_color))
-        if len(self._pins) == 4:
+        if len(self._pins) == CONST_RGBW_LED_PINS:
             color = list(color_util.color_rgb_to_rgbw(color[0], color[1], color[2]))
         brightness = _from_hass_brightness(self._attr_brightness)
         max_value = float(max(color))
@@ -275,7 +264,7 @@ class PwmRgbwLed(PwmSimpleLed):
         if ATTR_TRANSITION in kwargs:
             transition_time: timedelta = kwargs[ATTR_TRANSITION]
             await self._async_start_transition(
-                pca_intensity=color,
+                brightness=color,
                 duration=timedelta(seconds=transition_time),
             )
         else:
@@ -289,12 +278,12 @@ class PwmRgbwLed(PwmSimpleLed):
         """Turn off a LED."""
         if self.is_on:
             color = [0, 0, 0]
-            if len(self._pins) == 4:
+            if len(self._pins) == CONST_RGBW_LED_PINS:
                 color.append(0)
             if ATTR_TRANSITION in kwargs:
                 transition_time = kwargs[ATTR_TRANSITION]
                 await self._async_start_transition(
-                    pca_intensity=color, duration=timedelta(seconds=transition_time)
+                    brightness=color, duration=timedelta(seconds=transition_time)
                 )
             else:
                 for i in range(len(self._pins)):
@@ -304,11 +293,10 @@ class PwmRgbwLed(PwmSimpleLed):
         self.schedule_update_ha_state()
 
     async def _async_start_transition(
-        self, pca_intensity: list[int], duration: timedelta
+        self, brightness: list[int], duration: timedelta
     ) -> None:
         """Start light transitio."""
         # First check if a transition was in progress; in that case stop it.
-        self._transition_in_progress = False
         if self._transition_lister:
             self._transition_lister()
         # initialize relevant values
@@ -318,20 +306,20 @@ class PwmRgbwLed(PwmSimpleLed):
             self._transition_begin_brightness.append(
                 self._driver.get_pwm(self._pins[i])
             )
-            if self._transition_begin_brightness[i] != pca_intensity[i]:
+            if self._transition_begin_brightness[i] != brightness[i]:
                 color_is_different = True
 
         if color_is_different:
             self._transition_start = dt_util.utcnow()
             self._transition_end = self._transition_start + duration
-            self._transition_end_brightness = pca_intensity
+            self._transition_end_brightness = brightness
             # Start transition cycles.
             self._transition_lister = async_track_time_interval(
                 self.hass, self._async_step_transition, self._transition_step_time
             )
 
     @callback
-    async def _async_step_transition(self, args=None) -> None:
+    async def _async_step_transition(self, args: None = None) -> None:  # noqa: ARG002
         """Cycle for transition of output."""
         # Calculate switch off time, and if in the future, add a lister to hass
         now = dt_util.utcnow()
@@ -369,10 +357,3 @@ def _from_hass_brightness(brightness: int | None) -> int:
     if brightness:
         return brightness * CONST_PCA_INT_MULTIPLIER
     return 0
-
-
-def _from_hass_color(color: tuple[float, float] | None) -> tuple[int, int, int]:
-    """Convert Home Assistant RGB list to Color tuple."""
-    if color:
-        return color_util.color_hs_to_RGB(*color)
-    return (0, 0, 0)

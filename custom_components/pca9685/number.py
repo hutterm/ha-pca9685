@@ -5,50 +5,37 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-import homeassistant.helpers.config_validation as cv
-import voluptuous as vol
 from homeassistant.components.number import (
-    DEFAULT_MAX_VALUE,
-    DEFAULT_MIN_VALUE,
-    DEFAULT_STEP,
-    PLATFORM_SCHEMA,
     RestoreNumber,
 )
 from homeassistant.const import (
-    CONF_ADDRESS,
     CONF_MAXIMUM,
     CONF_MINIMUM,
     CONF_MODE,
     CONF_NAME,
     CONF_PIN,
     CONF_TYPE,
-    CONF_UNIQUE_ID,
     Platform,
 )
-from .pca_driver import PCA9685Driver
 
 from .const import (
     ATTR_FREQUENCY,
     ATTR_INVERT,
-    CONF_FREQUENCY,
     CONF_INVERT,
     CONF_NORMALIZE_LOWER,
     CONF_NORMALIZE_UPPER,
-    CONF_NUMBERS,
     CONF_STEP,
-    MODE_AUTO,
-    MODE_BOX,
-    MODE_SLIDER,
     DOMAIN,
     PCA9685_DRIVERS,
 )
 
-# if TYPE_CHECKING:
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+    from homeassistant.helpers.typing import ConfigType
+
+    from .pca_driver import PCA9685Driver
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,15 +50,15 @@ async def async_setup_entry(
         config_entry.entry_id
     ]
 
-    entities = []
-    for entity in config_entry.data["entities"]:
-        if entity[CONF_TYPE] == Platform.NUMBER:
-            entities.append(
-                PwmNumber(
-                    config=entity,
-                    driver=pca_driver,
-                )
-            )
+    entities = [
+        PwmNumber(
+            config=entity,
+            driver=pca_driver,
+        )
+        for entity in config_entry.data["entities"]
+        if entity[CONF_TYPE] == Platform.NUMBER
+    ]
+
     if len(entities):
         async_add_entities(entities)
 
