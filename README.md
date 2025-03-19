@@ -56,7 +56,7 @@ This integration can no longer be configured via YAML. Use the config flow funct
 - I2C bus: Select the I2C bus where the PCA9685 is connected. Use tools like i2cdetect to find the right bus.
   > default: first bus found in the system
 - I2C address: I2C address of the LED driver
-  > default: 0x40 (decimal 65)
+  > default: 0x40 (decimal 64)
 - frequency: The PWM frequency. 
   > default: 200 Hz
 
