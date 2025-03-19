@@ -59,7 +59,7 @@ async def async_setup_entry(
         if entity[CONF_TYPE] == Platform.NUMBER
     ]
 
-    if len(entities):
+    if len(entities) > 0:
         async_add_entities(entities)
 
 
@@ -137,7 +137,7 @@ class PwmNumber(RestoreNumber):
         )
 
         # Scale to range of the driver
-        scaled_value = int(round((used_value / range_value) * range_pwm))
+        scaled_value = round((used_value / range_value) * range_pwm)
         # Make sure it will fit in the 12-bits range of the pca9685
         scaled_value = min(range_pwm, scaled_value)
         scaled_value = max(0, scaled_value)

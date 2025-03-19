@@ -235,7 +235,7 @@ class PCA9685Driver:
 
         :param prescale: the prescale value of the controller
         """
-        return int(round(self.__oscillator_clock / ((prescale + 1) * 4096.0)))
+        return round(self.__oscillator_clock / ((prescale + 1) * 4096.0))
 
     def get_pwm_frequency(self) -> int:
         """Get the frequency for PWM output."""
