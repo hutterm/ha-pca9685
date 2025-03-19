@@ -1,6 +1,6 @@
 {
     "domain": "pca9685",
-    "name": "pca9685 PWM LED",
+    "name": "PCA9685 PWM device",
     "codeowners": [
         "@domectrl"
     ],
@@ -8,8 +8,8 @@
     "iot_class": "local_push",
     "issue_tracker": "https://github.com/domectrl/ha-pca9685/issues",
     "requirements": [
-        "pwmled==1.6.10",
-	"RPi.GPIO"
+        "smbus3>=0.5.5"
     ],
-    "version": "0.9.1"
+    "version": "0.9.1",
+    "config_flow": true
 }

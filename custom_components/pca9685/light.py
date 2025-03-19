@@ -1,110 +1,130 @@
 """Support for LED lights that can be controlled using PWM."""
 
 import logging
+from tracemalloc import start
+
 from typing import ClassVar
 
-import homeassistant.helpers.config_validation as cv
 import homeassistant.util.color as color_util
+from numpy import isin
 import voluptuous as vol
+from datetime import timedelta
+
+from homeassistant.const import CONF_TYPE, CONF_UNIQUE_ID, Platform
+
+import homeassistant.util.dt as dt_util
+from homeassistant.util import color as color_util
+
+
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_HS_COLOR,
     ATTR_TRANSITION,
-    PLATFORM_SCHEMA,
     ColorMode,
     LightEntity,
     LightEntityFeature,
 )
 from homeassistant.const import CONF_ADDRESS, CONF_NAME, CONF_UNIQUE_ID, STATE_ON
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.core import HomeAssistant, CALLBACK_TYPE, callback
 from homeassistant.helpers.restore_state import RestoreEntity
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from pwmled import Color
-from pwmled.driver.pca9685 import Pca9685Driver
-from pwmled.led import SimpleLed
-from pwmled.led.rgb import RgbLed
-from pwmled.led.rgbw import RgbwLed
+from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import (
+    async_track_time_interval,
+)
+from homeassistant.config_entries import ConfigEntry
+from .pca_driver import PCA9685Driver
+
+from custom_components.pca9685.pca_driver import PCA9685Driver
+
+from collections import namedtuple
+
+
+Color = namedtuple("Color", "R G B")
 
 from .const import (
-    CONF_FREQUENCY,
-    CONF_LEDS,
-    CONF_PINS,
-    CONST_MAX_INTENSITY,
-    CONST_RGB_LED_PINS,
-    CONST_RGBW_LED_PINS,
-    CONST_SIMPLE_LED_PINS,
+    DOMAIN,
+    CONF_PIN,
+    CONF_PIN_RED,
+    CONF_PIN_GREEN,
+    CONF_PIN_BLUE,
+    CONF_PIN_WHITE,
+    CONST_PCA_INT_MULTIPLIER,
     DEFAULT_BRIGHTNESS,
     DEFAULT_COLOR,
+    PCA9685_DRIVERS,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_LEDS): vol.All(
-            cv.ensure_list,
-            [
-                {
-                    vol.Required(CONF_NAME): cv.string,
-                    vol.Optional(CONF_UNIQUE_ID): cv.string,
-                    vol.Required(CONF_PINS): vol.All(cv.ensure_list, [cv.positive_int]),
-                    vol.Optional(CONF_FREQUENCY): cv.positive_int,
-                    vol.Optional(CONF_ADDRESS): cv.byte,
-                }
-            ],
-        )
-    }
-)
 
-
-def setup_platform(
-    hass: HomeAssistant,  # noqa: ARG001
-    config: ConfigType,
-    add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,  # noqa: ARG001
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the PWM LED lights."""
-    leds = []
-    for led_conf in config[CONF_LEDS]:
-        pins = led_conf[CONF_PINS]
-        opt_args = {}
-        if CONF_FREQUENCY in led_conf:
-            opt_args["freq"] = led_conf[CONF_FREQUENCY]
-        if CONF_ADDRESS in led_conf:
-            opt_args["address"] = led_conf[CONF_ADDRESS]
-        driver = Pca9685Driver(pins, **opt_args)
+    """Set up this platform for a specific ConfigEntry(==PCA9685 device)."""
+    pca_driver: PCA9685Driver = hass.data[DOMAIN][PCA9685_DRIVERS][
+        config_entry.entry_id
+    ]
 
-        name = led_conf[CONF_NAME]
-        unique_id = led_conf.get(CONF_UNIQUE_ID, None)
-        if len(pins) == CONST_SIMPLE_LED_PINS:
-            led = PwmSimpleLed(SimpleLed(driver), name, unique_id)
-        elif len(pins) == CONST_RGB_LED_PINS:
-            led = PwmRgbLed(RgbLed(driver), name, unique_id)
-        elif len(pins) == CONST_RGBW_LED_PINS:
-            led = PwmRgbLed(RgbwLed(driver), name, unique_id)
-        else:
-            _LOGGER.error("Invalid led type")
-            return
-        leds.append(led)
+    entities = []
+    for entity in config_entry.data["entities"]:
+        if entity[CONF_TYPE] == Platform.LIGHT:
+            if entity.get(CONF_PIN):
+                entities.append(
+                    PwmSimpleLed(
+                        driver=pca_driver,
+                        pin=entity[CONF_PIN],
+                        name=entity[CONF_NAME],
+                        unique_id=entity[CONF_UNIQUE_ID],
+                    )
+                )
+            else:
+                entities.append(
+                    PwmRgbwLed(
+                        driver=pca_driver,
+                        pin_red=entity[CONF_PIN_RED],
+                        pin_green=entity[CONF_PIN_GREEN],
+                        pin_blue=entity[CONF_PIN_BLUE],
+                        pin_white=entity.get(CONF_PIN_WHITE, None),
+                        name=entity[CONF_NAME],
+                        unique_id=entity[CONF_UNIQUE_ID],
+                    )
+                )
 
-    add_entities(leds)
+    async_add_entities(entities)
 
 
 class PwmSimpleLed(LightEntity, RestoreEntity):
     """Representation of a simple one-color PWM LED."""
 
     _attr_color_mode = ColorMode.BRIGHTNESS
-    _attr_supported_color_modes: ClassVar[dict[ColorMode.HS]] = {ColorMode.BRIGHTNESS}
+    _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
 
-    def __init__(self, led: SimpleLed, name: str, unique_id: str | None = None) -> None:
+    def __init__(
+        self,
+        driver: PCA9685Driver,
+        pin: int = 0,
+        name: str = "LED",
+        unique_id: str | None = None,
+    ) -> None:
         """Initialize one-color PWM LED."""
-        self._led = led
+        self._driver: PCA9685Driver = driver
         self._attr_name = name
         self._attr_unique_id = unique_id
         self._attr_is_on = False
         self._attr_brightness = DEFAULT_BRIGHTNESS
         self._attr_supported_features |= LightEntityFeature.TRANSITION
+        self._pin: int = pin
+        self._transition_step_time = timedelta(
+            milliseconds=150
+        )  # Transition step time in ms
+        self._transition_lister: CALLBACK_TYPE | None = None
+        self._transition_start = dt_util.utcnow().replace(microsecond=0)
+        self._transition_end = self._transition_start
+        self._transition_begin_brightness: int = 0
+        self._transition_end_brightness: int = 0
 
     async def async_added_to_hass(self) -> None:
         """Handle entity about to be added to hass event."""
@@ -120,52 +140,115 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
         """No polling needed."""
         return False
 
-    def turn_on(self, **kwargs: ConfigType) -> None:
+    async def async_turn_on(self, **kwargs: ConfigType) -> None:
         """Turn on a led."""
         if ATTR_BRIGHTNESS in kwargs:
             self._attr_brightness = kwargs[ATTR_BRIGHTNESS]
 
         if ATTR_TRANSITION in kwargs:
-            transition_time = kwargs[ATTR_TRANSITION]
-            self._led.transition(
-                transition_time,
-                is_on=True,
+            transition_time: timedelta = kwargs[ATTR_TRANSITION]
+            await self._async_start_transition(
                 brightness=_from_hass_brightness(self._attr_brightness),
+                duration=timedelta(seconds=transition_time),
             )
         else:
-            self._led.set(
-                is_on=True, brightness=_from_hass_brightness(self._attr_brightness)
+            self._driver.set_pwm(
+                led_num=self._pin, value=_from_hass_brightness(self._attr_brightness)
             )
 
         self._attr_is_on = True
         self.schedule_update_ha_state()
 
-    def turn_off(self, **kwargs: ConfigType) -> None:
+    async def async_turn_off(self, **kwargs: ConfigType) -> None:
         """Turn off a LED."""
         if self.is_on:
             if ATTR_TRANSITION in kwargs:
                 transition_time = kwargs[ATTR_TRANSITION]
-                self._led.transition(transition_time, is_on=False)
+                await self._async_start_transition(
+                    brightness=0, duration=timedelta(seconds=transition_time)
+                )
             else:
-                self._led.off()
+                self._driver.set_pwm(led_num=self._pin, value=0)
 
         self._attr_is_on = False
         self.schedule_update_ha_state()
 
+    async def _async_start_transition(
+        self, brightness: int, duration: timedelta
+    ) -> None:
+        """Start light transitio."""
+        # First check if a transition was in progress; in that case stop it.
+        self._transition_in_progress = False
+        if self._transition_lister:
+            self._transition_lister()
+        # initialize relevant values
+        self._transition_begin_brightness = self._driver.get_pwm(self._pin)
+        if self._transition_begin_brightness != brightness:
+            self._transition_start = dt_util.utcnow()
+            self._transition_end = self._transition_start + duration
+            self._transition_end_brightness = brightness
+            # Start transition cycles.
+            self._transition_lister = async_track_time_interval(
+                self.hass, self._async_step_transition, self._transition_step_time
+            )
 
-class PwmRgbLed(PwmSimpleLed):
+    @callback
+    async def _async_step_transition(self, args=None) -> None:
+        """Cycle for transition of output."""
+        # Calculate switch off time, and if in the future, add a lister to hass
+        now = dt_util.utcnow()
+        if now > self._transition_end:
+            self._driver.set_pwm(
+                led_num=self._pin, value=self._transition_end_brightness
+            )
+            if self._transition_lister:
+                self._transition_lister()  # Stop cycling
+        else:
+            elapsed: float = (now - self._transition_start).total_seconds()
+            total_transition: float = (
+                self._transition_end - self._transition_start
+            ).total_seconds()
+            target_brightness = int(
+                self._transition_begin_brightness
+                + (
+                    (
+                        (
+                            self._transition_end_brightness
+                            - self._transition_begin_brightness
+                        )
+                        * elapsed
+                    )
+                    / total_transition
+                )
+            )
+            self._driver.set_pwm(led_num=self._pin, value=target_brightness)
+
+
+class PwmRgbwLed(PwmSimpleLed):
     """Representation of a RGB(W) PWM LED."""
 
-    _led: RgbLed | RgbwLed
     _attr_color_mode = ColorMode.HS
     _attr_supported_color_modes: ClassVar[dict[ColorMode.HS]] = {ColorMode.HS}
 
     def __init__(
-        self, led: RgbLed | RgbwLed, name: str, unique_id: str | None = None
+        self,
+        driver: PCA9685Driver,
+        pin_red: int,
+        pin_green: int,
+        pin_blue: int,
+        pin_white: int | None = None,
+        name: str = "RGB_LED",
+        unique_id: str | None = None,
     ) -> None:
         """Initialize a RGB(W) PWM LED."""
-        super().__init__(led, name, unique_id)
+        super().__init__(driver=driver, name=name, unique_id=unique_id)
         self._attr_hs_color = DEFAULT_COLOR
+        self._pins: list[int] = [pin_red, pin_green, pin_blue]
+        if pin_white != None:
+            self._pins.append(pin_white)
+        self._transition_begin_brightness: list[int] = []
+        self._transition_end_brightness: list[int] = []
+        self._attr_hs_color = (0.0, 0.0)
 
     async def async_added_to_hass(self) -> None:
         """Handle entity about to be added to hass event."""
@@ -173,42 +256,123 @@ class PwmRgbLed(PwmSimpleLed):
         if last_state := await self.async_get_last_state():
             self._attr_hs_color = last_state.attributes.get("hs_color", DEFAULT_COLOR)
 
-    def turn_on(self, **kwargs: ConfigType) -> None:
+    async def async_turn_on(self, **kwargs: ConfigType) -> None:
         """Turn on a LED."""
         if ATTR_HS_COLOR in kwargs:
             self._attr_hs_color = kwargs[ATTR_HS_COLOR]
         if ATTR_BRIGHTNESS in kwargs:
             self._attr_brightness = kwargs[ATTR_BRIGHTNESS]
 
+        color = list(color_util.color_hs_to_RGB(*self._attr_hs_color))
+        if len(self._pins) == 4:
+            color = list(color_util.color_rgb_to_rgbw(color[0], color[1], color[2]))
+        brightness = _from_hass_brightness(self._attr_brightness)
+        max_value = float(max(color))
+        for i in range(len(color)):
+            color[i] = int((color[i] / max_value) * brightness)
+            _LOGGER.debug("Set color [%d] to value %d", i, color[i])
+
         if ATTR_TRANSITION in kwargs:
-            transition_time = kwargs[ATTR_TRANSITION]
-            self._led.transition(
-                transition_time,
-                is_on=True,
-                brightness=_from_hass_brightness(self._attr_brightness),
-                color=_from_hass_color(self._attr_hs_color),
+            transition_time: timedelta = kwargs[ATTR_TRANSITION]
+            await self._async_start_transition(
+                pca_intensity=color,
+                duration=timedelta(seconds=transition_time),
             )
         else:
-            self._led.set(
-                is_on=True,
-                brightness=_from_hass_brightness(self._attr_brightness),
-                color=_from_hass_color(self._attr_hs_color),
-            )
+            for i in range(len(self._pins)):
+                self._driver.set_pwm(led_num=self._pins[i], value=color[i])
 
         self._attr_is_on = True
         self.schedule_update_ha_state()
 
+    async def async_turn_off(self, **kwargs: ConfigType) -> None:
+        """Turn off a LED."""
+        if self.is_on:
+            color = [0, 0, 0]
+            if len(self._pins) == 4:
+                color.append(0)
+            if ATTR_TRANSITION in kwargs:
+                transition_time = kwargs[ATTR_TRANSITION]
+                await self._async_start_transition(
+                    pca_intensity=color, duration=timedelta(seconds=transition_time)
+                )
+            else:
+                for i in range(len(self._pins)):
+                    self._driver.set_pwm(led_num=self._pins[i], value=0)
+
+        self._attr_is_on = False
+        self.schedule_update_ha_state()
+
+    async def _async_start_transition(
+        self, pca_intensity: list[int], duration: timedelta
+    ) -> None:
+        """Start light transitio."""
+        # First check if a transition was in progress; in that case stop it.
+        self._transition_in_progress = False
+        if self._transition_lister:
+            self._transition_lister()
+        # initialize relevant values
+        self._transition_begin_brightness.clear()
+        color_is_different = False
+        for i in range(len(self._pins)):
+            self._transition_begin_brightness.append(
+                self._driver.get_pwm(self._pins[i])
+            )
+            if self._transition_begin_brightness[i] != pca_intensity[i]:
+                color_is_different = True
+
+        if color_is_different:
+            self._transition_start = dt_util.utcnow()
+            self._transition_end = self._transition_start + duration
+            self._transition_end_brightness = pca_intensity
+            # Start transition cycles.
+            self._transition_lister = async_track_time_interval(
+                self.hass, self._async_step_transition, self._transition_step_time
+            )
+
+    @callback
+    async def _async_step_transition(self, args=None) -> None:
+        """Cycle for transition of output."""
+        # Calculate switch off time, and if in the future, add a lister to hass
+        now = dt_util.utcnow()
+        if now > self._transition_end:
+            for i in range(len(self._pins)):
+                self._driver.set_pwm(
+                    led_num=self._pins[i], value=self._transition_end_brightness[i]
+                )
+            if self._transition_lister:
+                self._transition_lister()  # Stop cycling
+        else:
+            elapsed: float = (now - self._transition_start).total_seconds()
+            total_transition: float = (
+                self._transition_end - self._transition_start
+            ).total_seconds()
+            for i in range(len(self._pins)):
+                target_brightness = int(
+                    self._transition_begin_brightness[i]
+                    + (
+                        (
+                            (
+                                self._transition_end_brightness[i]
+                                - self._transition_begin_brightness[i]
+                            )
+                            * elapsed
+                        )
+                        / total_transition
+                    )
+                )
+                self._driver.set_pwm(led_num=self._pins[i], value=target_brightness)
+
 
 def _from_hass_brightness(brightness: int | None) -> int:
-    """Convert Home Assistant  units to percentage."""
+    """Convert Home Assistant  units (0..256) to 0..4096."""
     if brightness:
-        return brightness / CONST_MAX_INTENSITY
+        return brightness * CONST_PCA_INT_MULTIPLIER
     return 0
 
 
-def _from_hass_color(color: tuple[float, float] | None) -> Color:
+def _from_hass_color(color: tuple[float, float] | None) -> tuple[int, int, int]:
     """Convert Home Assistant RGB list to Color tuple."""
     if color:
-        rgb = color_util.color_hs_to_RGB(*color)
-        return Color(*tuple(rgb))
-    return Color(0, 0, 0)
+        return color_util.color_hs_to_RGB(*color)
+    return (0, 0, 0)
