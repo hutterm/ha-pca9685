@@ -1,6 +1,6 @@
 # Home Assistant PCA9685 PWM custom integration
 
-**This is a spin-off from an original Home Assistant integration which was removed in Home Assistant Core 2022.4. The original rpi_gpi_pwm was stored [here](https://github.com/RedMeKool/HA-Raspberry-pi-GPIO-PWM/) but due to changes in 2022.7.5 support for pca9685 PWM devices was dropped. This module brings back  support for the pca9685 PWM LED driver in a separate component. As of Home Assitant version 2024.10.4 we also implemented an own driver to prevent upgrading users from dependency issues.**
+**This is a spin-off from an original Home Assistant integration which was removed in Home Assistant Core 2022.4. The original rpi_gpi_pwm was stored [here](https://github.com/RedMeKool/HA-Raspberry-pi-GPIO-PWM/) but due to changes in 2022.7.5 support for pca9685 PWM devices was dropped. This module brings back  support for the pca9685 PWM LED driver in a separate component. As of Home Assitant version 2025.3.3 we also implemented an own driver to prevent upgrading users from dependency issues. Note that this driver will run only on linux-based systems.**
 
 [![GitHub Release][releases-shield]][releases]
 [![GitHub Activity][commits-shield]][commits]
@@ -45,6 +45,9 @@ Platform | Description
 
 ## Configuration via user interface:
 * In the user interface go to "Configuration" -> "Integrations" click "+" and search for "PCA9685"
+* After the creation of the PCA9685 integration, you will land on it's particular integration page ("Configuration" -> "Integrations" -> "PCA9685 PWM device")
+* Click on the menu-icon, than on the '+' sign to add the entities of your choice per pin
+![alt text](https://github.com/domectrl/ha-pca9685/blob/main/images/add_entity.png)
 * For a description of the configuration parameters, see Configuration parameters
 
 ## YAML Configuration
