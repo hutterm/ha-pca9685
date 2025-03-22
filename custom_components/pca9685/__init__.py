@@ -18,7 +18,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up PCA9685 from a config entry."""
     # Create PCA driver for this platform
     pca_driver = PCA9685Driver(
-        address=entry.data[CONF_ADDR], i2c_bus=entry.data[CONF_BUS]
+        address=int(entry.data[CONF_ADDR]), i2c_bus=entry.data[CONF_BUS]
     )
     pca_driver.set_pwm_frequency(entry.data[CONF_FREQUENCY])
 

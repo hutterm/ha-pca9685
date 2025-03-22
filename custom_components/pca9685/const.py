@@ -10,13 +10,8 @@ CONF_FREQUENCY = "frequency"
 CONF_NORMALIZE_LOWER = "normalize_lower"
 CONF_NORMALIZE_UPPER = "normalize_upper"
 
-CONF_NUMBERS = "numbers"
 CONF_INVERT = "invert"
 CONF_STEP = "step"
-CONF_CTRLS = "controllers"
-CONF_LEDS = "leds"
-CONF_DEVICES = "devices"
-CONF_PINS = "pins"
 CONF_PIN = "pin"
 CONF_PIN_RED = "pin (red)"
 CONF_PIN_GREEN = "pin (green)"
@@ -32,7 +27,7 @@ ATTR_INVERT = "invert"
 
 DEFAULT_ADDR = 0x40
 DEFAULT_BRIGHTNESS = 255
-DEFAULT_COLOR = (0, 0)
+DEFAULT_COLOR = (0.0, 0.0)
 DEFAULT_FREQ = 200
 DEFAULT_MODE = "auto"
 

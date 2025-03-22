@@ -1,7 +1,6 @@
 """Driver code for PCA9685 LED driver."""
 
 import logging
-import re
 from pathlib import Path
 from types import MappingProxyType
 
@@ -80,29 +79,44 @@ class PCA9685Driver:
         :param i2c_bus: SMBus to use or number of the I2C bus in the linux machine.
                         See /dev/i2c-*. Use None to autodetect the first available.
         """
-        if not SIMULATE:
-            if i2c_bus is None:
-                bus_list = self.get_i2c_bus_numbers()
-                if len(bus_list) < 1:
-                    msg = "Cannot determine I2C bus number"
-                    raise PCA9685Error(msg)
-                i2c_bus = SMBus(bus_list[0])
-            if isinstance(i2c_bus, int | str):
-                i2c_bus = SMBus(i2c_bus)
-            self.__bus: SMBus = i2c_bus
+        self.__busnr = None
+        i2c_bus: SMBus | None = None
 
+        if i2c_bus is None:
+            bus_list = self.get_i2c_bus_numbers()
+            if len(bus_list) < 1:
+                msg = "Cannot determine I2C bus number"
+                raise PCA9685Error(msg)
+            if not SIMULATE:
+                i2c_bus = SMBus(bus_list[0])
+            self.__busnr = bus_list[0]
+        if isinstance(i2c_bus, int):
+            self.__busnr = i2c_bus
+            if not SIMULATE:
+                i2c_bus = SMBus(i2c_bus)
+        if isinstance(i2c_bus, str):
+            self.__busnr = self.get_i2c_bus_number_from_string(i2c_bus=i2c_bus)
+            if not SIMULATE:
+                i2c_bus = SMBus(i2c_bus)
+        self.__bus: SMBus | None = i2c_bus
         self.__address: int = address
         self.__oscillator_clock = 25000000
 
-    @staticmethod
-    def get_i2c_bus_numbers() -> list[int]:
+    def get_i2c_bus_numbers(self) -> list[int]:
         """Search all the available I2C busses in the system."""
-        res = []
-        for bus in Path("/dev/").glob("i2c-*"):
-            r = re.match(r"/dev/i2c-([\\d]){1,2}", str(bus))
-            if r:
-                res.append(int(r.group(1)))
-        return res
+        return [
+            self.get_i2c_bus_number_from_string(str(b))
+            for b in Path("/dev/").glob("i2c-*")
+        ]
+
+    def get_i2c_bus_number_from_string(self, i2c_bus: str) -> int:
+        """Find the I2C bus number in a string and convert to int."""
+        return int(i2c_bus.lower().replace("/dev/i2c-", ""))
+
+    @property
+    def address(self) -> int:
+        """Returns the address of the actual device."""
+        return self.__address
 
     @property
     def mode_1(self) -> int:
@@ -110,23 +124,14 @@ class PCA9685Driver:
         return self.read(Registers.MODE_1)
 
     @property
-    def bus(self) -> SMBus:
+    def busnr(self) -> int | None:
+        """Return the number of the used i2c bus."""
+        return self.__busnr
+
+    @property
+    def bus(self) -> SMBus | None:
         """Returns the bus instance."""
         return self.__bus
-
-    def get_led_register_from_name(self, name: str) -> int:
-        """
-        Parse the name for led number.
-
-        :param name: attribute name, like: led_1
-        """
-        res = re.match("^led_([0-9]{1,2})$", name)
-        if res is None:
-            msg = f"Unknown attribute: '{name}'"
-            raise AttributeError(msg)
-        led_num = int(res.group(1))
-        self.__check_range("led_number", led_num)
-        return self.calc_led_register(led_num)
 
     def calc_led_register(self, led_num: int) -> int:
         """

@@ -2,7 +2,6 @@
 
 import logging
 from datetime import timedelta
-from typing import ClassVar
 
 import homeassistant.util.color as color_util
 import homeassistant.util.dt as dt_util
@@ -18,11 +17,11 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_NAME,
     CONF_TYPE,
-    CONF_UNIQUE_ID,
     STATE_ON,
     Platform,
 )
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import (
     async_track_time_interval,
@@ -59,27 +58,32 @@ async def async_setup_entry(
     ]
 
     entities = []
-    for entity in config_entry.data["entities"]:
-        if entity[CONF_TYPE] == Platform.LIGHT:
-            if entity.get(CONF_PIN):
+    for unique_id, entry in config_entry.subentries.items():
+        if entry.data[CONF_TYPE] == Platform.LIGHT:
+            if entry.data.get(CONF_PIN) is not None:
                 entities.append(
                     PwmSimpleLed(
                         driver=pca_driver,
-                        pin=entity[CONF_PIN],
-                        name=entity[CONF_NAME],
-                        unique_id=entity[CONF_UNIQUE_ID],
+                        pin=int(entry.data[CONF_PIN]),
+                        name=entry.data[CONF_NAME],
+                        unique_id=unique_id,
+                        config_unique_id=str(config_entry.unique_id),
                     )
                 )
             else:
+                pin_white = entry.data.get(CONF_PIN_WHITE, None)
+                if pin_white is not None:
+                    pin_white = int(pin_white)
                 entities.append(
                     PwmRgbwLed(
                         driver=pca_driver,
-                        pin_red=entity[CONF_PIN_RED],
-                        pin_green=entity[CONF_PIN_GREEN],
-                        pin_blue=entity[CONF_PIN_BLUE],
-                        pin_white=entity.get(CONF_PIN_WHITE, None),
-                        name=entity[CONF_NAME],
-                        unique_id=entity[CONF_UNIQUE_ID],
+                        name=entry.data[CONF_NAME],
+                        pin_red=int(entry.data[CONF_PIN_RED]),
+                        pin_green=int(entry.data[CONF_PIN_GREEN]),
+                        pin_blue=int(entry.data[CONF_PIN_BLUE]),
+                        pin_white=pin_white,
+                        unique_id=unique_id,
+                        config_unique_id=str(config_entry.unique_id),
                     )
                 )
 
@@ -94,18 +98,25 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
     def __init__(
         self,
         driver: PCA9685Driver,
+        name: str,
+        unique_id: str,
+        config_unique_id: str,
         pin: int = 0,
-        name: str = "LED",
-        unique_id: str | None = None,
     ) -> None:
         """Initialize one-color PWM LED."""
         self._driver: PCA9685Driver = driver
-        self._attr_name = name
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, config_unique_id)},
+            name=DOMAIN.upper(),
+            manufacturer="NXP",
+            model="PCA9685",
+        )
         self._attr_unique_id = unique_id
         self._attr_is_on = False
         self._attr_brightness = DEFAULT_BRIGHTNESS
         self._attr_supported_features |= LightEntityFeature.TRANSITION
         self._pin: int = pin
+        self._attr_name = name
         self._transition_step_time = timedelta(
             milliseconds=150
         )  # Transition step time in ms
@@ -216,34 +227,43 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
 class PwmRgbwLed(PwmSimpleLed):
     """Representation of a RGB(W) PWM LED."""
 
-    _attr_color_mode = ColorMode.HS
-    _attr_supported_color_modes: ClassVar[dict[ColorMode.HS]] = {ColorMode.HS}
-
     def __init__(  # noqa: PLR0913
         self,
         driver: PCA9685Driver,
+        name: str,
+        unique_id: str,
+        config_unique_id: str,
         pin_red: int,
         pin_green: int,
         pin_blue: int,
         pin_white: int | None = None,
-        name: str = "RGB_LED",
-        unique_id: str | None = None,
     ) -> None:
         """Initialize a RGB(W) PWM LED."""
-        super().__init__(driver=driver, name=name, unique_id=unique_id)
+        super().__init__(
+            driver=driver,
+            name=name,
+            unique_id=unique_id,
+            config_unique_id=config_unique_id,
+        )
+        self._attr_color_mode = ColorMode.HS
+        self._attr_supported_color_modes: set[ColorMode] = {self._attr_color_mode}
         self._attr_hs_color = DEFAULT_COLOR
+        _LOGGER.debug("color: %s", self._attr_hs_color)
         self._pins: list[int] = [pin_red, pin_green, pin_blue]
         if pin_white is not None:
             self._pins.append(pin_white)
         self._transition_begin_brightness: list[int] = []
         self._transition_end_brightness: list[int] = []
-        self._attr_hs_color = (0.0, 0.0)
 
     async def async_added_to_hass(self) -> None:
         """Handle entity about to be added to hass event."""
         await super().async_added_to_hass()
         if last_state := await self.async_get_last_state():
             self._attr_hs_color = last_state.attributes.get("hs_color", DEFAULT_COLOR)
+            if (
+                self._attr_hs_color is None
+            ):  # If HA was forcefully closed, hs_color might contain None
+                self._attr_hs_color = DEFAULT_COLOR
 
     async def async_turn_on(self, **kwargs: ConfigType) -> None:
         """Turn on a LED."""

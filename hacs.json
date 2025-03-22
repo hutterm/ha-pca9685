@@ -2,7 +2,7 @@
     "name": "PCA9685",
     "filename": "pca9685.zip",
     "hide_default_branch": true,
-    "homeassistant": "2025.3.1",
+    "homeassistant": "2025.3.3",
     "render_readme": true,
     "zip_release": true
 }

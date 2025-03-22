@@ -17,6 +17,7 @@ from homeassistant.const import (
     CONF_TYPE,
     Platform,
 )
+from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import (
     ATTR_FREQUENCY,
@@ -30,10 +31,11 @@ from .const import (
 )
 
 if TYPE_CHECKING:
+    from types import MappingProxyType
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-    from homeassistant.helpers.typing import ConfigType
 
     from .pca_driver import PCA9685Driver
 
@@ -52,11 +54,13 @@ async def async_setup_entry(
 
     entities = [
         PwmNumber(
-            config=entity,
+            config=entry.data,
             driver=pca_driver,
+            unique_id=unique_id,
+            config_unique_id=str(config_entry.unique_id),
         )
-        for entity in config_entry.data["entities"]
-        if entity[CONF_TYPE] == Platform.NUMBER
+        for unique_id, entry in config_entry.subentries.items()
+        if entry.data[CONF_TYPE] == Platform.NUMBER
     ]
 
     if len(entities) > 0:
@@ -66,15 +70,32 @@ async def async_setup_entry(
 class PwmNumber(RestoreNumber):
     """Representation of a simple  PWM output."""
 
-    def __init__(self, config: ConfigType, driver: PCA9685Driver) -> None:
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        config: MappingProxyType[str, Any],
+        driver: PCA9685Driver,
+        unique_id: str,
+        config_unique_id: str,
+    ) -> None:
         """Initialize one-color PWM LED."""
         self._driver = driver
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, config_unique_id)},
+            name=DOMAIN.upper(),
+            manufacturer="NXP",
+            model="PCA9685",
+        )
+        self._attr_unique_id = unique_id
         self._config = config
         self._attr_native_min_value = config[CONF_MINIMUM]
         self._attr_native_max_value = config[CONF_MAXIMUM]
         self._attr_native_step = config[CONF_STEP]
         self._attr_mode = config[CONF_MODE]
         self._attr_native_value = config[CONF_MINIMUM]
+        self._attr_name = config[CONF_NAME]
+        self._pin = int(config[CONF_PIN])
 
     async def async_added_to_hass(self) -> None:
         """Handle entity about to be added to hass event."""
@@ -90,16 +111,6 @@ class PwmNumber(RestoreNumber):
                 )
         else:
             await self.async_set_native_value(self._config[CONF_MINIMUM])
-
-    @property
-    def should_poll(self) -> bool:
-        """No polling needed."""
-        return False
-
-    @property
-    def name(self) -> str:
-        """Return the name of the number."""
-        return self._config[CONF_NAME]
 
     @property
     def frequency(self) -> int:
@@ -142,6 +153,6 @@ class PwmNumber(RestoreNumber):
         scaled_value = min(range_pwm, scaled_value)
         scaled_value = max(0, scaled_value)
         # Set value to driver
-        self._driver.set_pwm(led_num=self._config[CONF_PIN], value=scaled_value)
+        self._driver.set_pwm(led_num=self._pin, value=scaled_value)
         self._attr_native_value = value
         self.schedule_update_ha_state()
