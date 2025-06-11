@@ -10,7 +10,7 @@ from .const import CONST_PWM_FREQ_MAX, CONST_PWM_FREQ_MIN
 
 _LOGGER = logging.getLogger(__name__)
 
-SIMULATE = False
+SIMULATE = True
 
 
 class PCA9685Error(Exception):
@@ -71,7 +71,7 @@ class PCA9685Driver:
         }
     )
 
-    def __init__(self, address: int, i2c_bus: SMBus | int | None = None) -> None:
+    def __init__(self, address: int, i2c_bus: SMBus | int | str | None = None) -> None:
         """
         Create the PCA9685 driver.
 
@@ -80,7 +80,7 @@ class PCA9685Driver:
                         See /dev/i2c-*. Use None to autodetect the first available.
         """
         self.__busnr = None
-        i2c_bus: SMBus | None = None
+        self.__bus: SMBus | None = None
 
         if i2c_bus is None:
             bus_list = self.get_i2c_bus_numbers()
@@ -88,17 +88,17 @@ class PCA9685Driver:
                 msg = "Cannot determine I2C bus number"
                 raise PCA9685Error(msg)
             if not SIMULATE:
-                i2c_bus = SMBus(bus_list[0])
+                self.__bus = SMBus(bus_list[0])
             self.__busnr = bus_list[0]
         if isinstance(i2c_bus, int):
             self.__busnr = i2c_bus
             if not SIMULATE:
-                i2c_bus = SMBus(i2c_bus)
+                self.__bus = SMBus(i2c_bus)
         if isinstance(i2c_bus, str):
             self.__busnr = self.get_i2c_bus_number_from_string(i2c_bus=i2c_bus)
             if not SIMULATE:
-                i2c_bus = SMBus(i2c_bus)
-        self.__bus: SMBus | None = i2c_bus
+                self.__bus = SMBus(i2c_bus)
+
         self.__address: int = address
         self.__oscillator_clock = 25000000
 
