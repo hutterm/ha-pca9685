@@ -10,7 +10,7 @@ from .const import CONST_PWM_FREQ_MAX, CONST_PWM_FREQ_MIN
 
 _LOGGER = logging.getLogger(__name__)
 
-SIMULATE = True
+SIMULATE = False
 
 
 class PCA9685Error(Exception):
