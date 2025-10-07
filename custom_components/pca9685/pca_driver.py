@@ -156,7 +156,7 @@ class PCA9685Driver:
             msg = f"{option} must be less than {r[1]}, got {value}"
             raise PCA9685Error(msg)
 
-    def set_pwm(self, led_num: int, value: int) -> None:
+    async def set_pwm(self, led_num: int, value: int) -> None:
         """
         Set PWM value for the specified LED.
 
@@ -167,19 +167,21 @@ class PCA9685Driver:
         self.__check_range("led_value", value)
 
         register_low = self.calc_led_register(led_num)
-        self.write(register_low, value_low(value))
-        self.write(register_low + 1, value_high(value))
+        async with self._device_lock:
+            self.write(register_low, value_low(value))
+            self.write(register_low + 1, value_high(value))
 
-    def __get_led_value(self, register_low: int) -> int:
-        low = self.read(register_low)
-        high = self.read(register_low + 1)
-        return low + (high * 256)
+    async def __get_led_value(self, register_low: int) -> int:
+        async with self._device_lock:
+            low = self.read(register_low)
+            high = self.read(register_low + 1)
+            return low + (high * 256)
 
-    def get_pwm(self, led_num: int) -> int:
+    async def get_pwm(self, led_num: int) -> int:
         """Get LED PWM value."""
         self.__check_range("led_number", led_num)
         register_low = self.calc_led_register(led_num)
-        return self.__get_led_value(register_low)
+        return await self.__get_led_value(register_low)
 
     def sleep(self) -> None:
         """Send the controller to sleep."""
@@ -202,11 +204,7 @@ class PCA9685Driver:
         self.__check_range("register_value", value)
         _LOGGER.debug("Write %d to register %d", value, reg)
         if not SIMULATE:
-            self._device_lock.acquire()
-            try:
-                self.__bus.write_byte_data(self.__address, reg, value)
-            finally:
-                self._device_lock.release()
+            self.__bus.write_byte_data(self.__address, reg, value)
 
     def read(self, reg: int) -> int:
         """
@@ -216,12 +214,8 @@ class PCA9685Driver:
         """
         if SIMULATE:
             return 0
-        self._device_lock.acquire()
-        try:
-            return self.__bus.read_byte_data(self.__address, reg)
-        finally:
-            self._device_lock.release()
-        return 0
+        return self.__bus.read_byte_data(self.__address, reg)
+
 
     def calc_pre_scale(self, frequency: int) -> int:
         """
@@ -233,7 +227,7 @@ class PCA9685Driver:
         """
         return int(round(self.__oscillator_clock / (4096.0 * frequency)) - 1)
 
-    def set_pwm_frequency(self, value: int) -> None:
+    async def set_pwm_frequency(self, value: int) -> None:
         """
         Set the frequency for all PWM output.
 
@@ -242,9 +236,10 @@ class PCA9685Driver:
         self.__check_range("pwm_frequency", value)
         reg_val = self.calc_pre_scale(value)
         _LOGGER.debug("Calculated prescale value is %d", reg_val)
-        self.sleep()
-        self.write(Registers.PRE_SCALE, reg_val)
-        self.wake()
+        async with self._device_lock:
+            self.sleep()
+            self.write(Registers.PRE_SCALE, reg_val)
+            self.wake()
 
     def calc_frequency(self, prescale: int) -> int:
         """
@@ -256,6 +251,7 @@ class PCA9685Driver:
         """
         return round(self.__oscillator_clock / ((prescale + 1) * 4096.0))
 
-    def get_pwm_frequency(self) -> int:
+    async def get_pwm_frequency(self) -> int:
         """Get the frequency for PWM output."""
-        return self.calc_frequency(self.read(Registers.PRE_SCALE))
+        async with self._device_lock:
+            return self.calc_frequency(self.read(Registers.PRE_SCALE))

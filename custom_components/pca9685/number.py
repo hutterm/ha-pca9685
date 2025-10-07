@@ -113,9 +113,9 @@ class PwmNumber(RestoreNumber):
             await self.async_set_native_value(self._config[CONF_MINIMUM])
 
     @property
-    def frequency(self) -> int:
+    async def frequency(self) -> int:
         """Return PWM frequency."""
-        return self._driver.get_pwm_frequency()
+        return await self._driver.get_pwm_frequency()
 
     @property
     def invert(self) -> bool:
@@ -123,10 +123,10 @@ class PwmNumber(RestoreNumber):
         return self._config[CONF_INVERT]
 
     @property
-    def capability_attributes(self) -> dict[str, Any]:
+    async def capability_attributes(self) -> dict[str, Any]:
         """Return capability attributes."""
         attr = super().capability_attributes
-        attr[ATTR_FREQUENCY] = self.frequency
+        attr[ATTR_FREQUENCY] = await self.frequency
         attr[ATTR_INVERT] = self.invert
         return attr
 
@@ -153,6 +153,6 @@ class PwmNumber(RestoreNumber):
         scaled_value = min(range_pwm, scaled_value)
         scaled_value = max(0, scaled_value)
         # Set value to driver
-        self._driver.set_pwm(led_num=self._pin, value=scaled_value)
+        await self._driver.set_pwm(led_num=self._pin, value=scaled_value)
         self._attr_native_value = value
         self.schedule_update_ha_state()

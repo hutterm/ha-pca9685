@@ -153,7 +153,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
                 duration=timedelta(seconds=transition_time),
             )
         else:
-            self._driver.set_pwm(
+            await self._driver.set_pwm(
                 led_num=self._pin, value=_from_hass_brightness(self._attr_brightness)
             )
 
@@ -169,7 +169,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
                     brightness=0, duration=timedelta(seconds=transition_time)
                 )
             else:
-                self._driver.set_pwm(led_num=self._pin, value=0)
+                await self._driver.set_pwm(led_num=self._pin, value=0)
 
         self._attr_is_on = False
         self.schedule_update_ha_state()
@@ -182,7 +182,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
         if self._transition_lister:
             self._transition_lister()
         # initialize relevant values
-        self._transition_begin_brightness = self._driver.get_pwm(self._pin)
+        self._transition_begin_brightness = await self._driver.get_pwm(self._pin)
         if self._transition_begin_brightness != brightness:
             self._transition_start = dt_util.utcnow()
             self._transition_end = self._transition_start + duration
@@ -198,7 +198,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
         # Calculate switch off time, and if in the future, add a lister to hass
         now = dt_util.utcnow()
         if now > self._transition_end:
-            self._driver.set_pwm(
+            await self._driver.set_pwm(
                 led_num=self._pin, value=self._transition_end_brightness
             )
             if self._transition_lister:
@@ -221,7 +221,7 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
                     / total_transition
                 )
             )
-            self._driver.set_pwm(led_num=self._pin, value=target_brightness)
+            await self._driver.set_pwm(led_num=self._pin, value=target_brightness)
 
 
 class PwmRgbwLed(PwmSimpleLed):
@@ -289,7 +289,7 @@ class PwmRgbwLed(PwmSimpleLed):
             )
         else:
             for i in range(len(self._pins)):
-                self._driver.set_pwm(led_num=self._pins[i], value=color[i])
+                await self._driver.set_pwm(led_num=self._pins[i], value=color[i])
 
         self._attr_is_on = True
         self.schedule_update_ha_state()
@@ -307,7 +307,7 @@ class PwmRgbwLed(PwmSimpleLed):
                 )
             else:
                 for i in range(len(self._pins)):
-                    self._driver.set_pwm(led_num=self._pins[i], value=0)
+                    await self._driver.set_pwm(led_num=self._pins[i], value=0)
 
         self._attr_is_on = False
         self.schedule_update_ha_state()
@@ -324,7 +324,7 @@ class PwmRgbwLed(PwmSimpleLed):
         color_is_different = False
         for i in range(len(self._pins)):
             self._transition_begin_brightness.append(
-                self._driver.get_pwm(self._pins[i])
+                await self._driver.get_pwm(self._pins[i])
             )
             if self._transition_begin_brightness[i] != brightness[i]:
                 color_is_different = True
@@ -345,7 +345,7 @@ class PwmRgbwLed(PwmSimpleLed):
         now = dt_util.utcnow()
         if now > self._transition_end:
             for i in range(len(self._pins)):
-                self._driver.set_pwm(
+                await self._driver.set_pwm(
                     led_num=self._pins[i], value=self._transition_end_brightness[i]
                 )
             if self._transition_lister:
