@@ -1,5 +1,6 @@
 """Driver code for PCA9685 LED driver."""
 
+import asyncio
 import logging
 from pathlib import Path
 from types import MappingProxyType
@@ -71,7 +72,7 @@ class PCA9685Driver:
         }
     )
 
-    def __init__(self, address: int, i2c_bus: SMBus | int | str | None = None) -> None:
+    def __init__(self, address: int, i2c_bus: SMBus | int | str | None = None, device_lock: asyncio.Lock | None = None) -> None:
         """
         Create the PCA9685 driver.
 
@@ -101,6 +102,9 @@ class PCA9685Driver:
 
         self.__address: int = address
         self.__oscillator_clock = 25000000
+        self._device_lock = device_lock or asyncio.Lock()
+
+
 
     def get_i2c_bus_numbers(self) -> list[int]:
         """Search all the available I2C busses in the system."""
@@ -197,7 +201,11 @@ class PCA9685Driver:
         self.__check_range("register_value", value)
         _LOGGER.debug("Write %d to register %d", value, reg)
         if not SIMULATE:
-            self.__bus.write_byte_data(self.__address, reg, value)
+            self._device_lock.acquire()
+            try:
+                self.__bus.write_byte_data(self.__address, reg, value)
+            finally:
+                self._device_lock.release()
 
     def read(self, reg: int) -> int:
         """
@@ -207,7 +215,12 @@ class PCA9685Driver:
         """
         if SIMULATE:
             return 0
-        return self.__bus.read_byte_data(self.__address, reg)
+        self._device_lock.acquire()
+        try:
+            return self.__bus.read_byte_data(self.__address, reg)
+        finally:
+            self._device_lock.release()
+        return 0
 
     def calc_pre_scale(self, frequency: int) -> int:
         """
