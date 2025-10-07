@@ -221,6 +221,7 @@ class PCA9685Driver:
         finally:
             self._device_lock.release()
         return 0
+    
 
     def calc_pre_scale(self, frequency: int) -> int:
         """
