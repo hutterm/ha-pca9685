@@ -72,7 +72,8 @@ class PCA9685Driver:
         }
     )
 
-    def __init__(self, address: int, i2c_bus: SMBus | int | str | None = None, device_lock: asyncio.Lock | None = None) -> None:
+    def __init__(self, address: int, i2c_bus: SMBus | int | str | None = None,
+                 device_lock: asyncio.Lock | None = None) -> None:
         """
         Create the PCA9685 driver.
 
@@ -221,7 +222,6 @@ class PCA9685Driver:
         finally:
             self._device_lock.release()
         return 0
-    
 
     def calc_pre_scale(self, frequency: int) -> int:
         """
