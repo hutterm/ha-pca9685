@@ -26,7 +26,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     locks = hass.data[I2C_LOCKS_KEY]
     if bus not in locks:
         locks[bus] = asyncio.Lock()
-        _LOGGER.debug("PCA9685 Created new lock for I2C bus %s", bus)
+        _LOGGER.warning("PCA9685 Created new lock for I2C bus %s", bus)
     device_lock = locks[bus]
 
     pca_driver = PCA9685Driver(
