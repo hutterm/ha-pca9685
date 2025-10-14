@@ -102,9 +102,9 @@ class PCA9685Driver:
 
     async def init_async(self, device_lock: asyncio.Lock) -> None:
         """Initialize the driver asynchronously."""
-        self.device_lock = device_lock
+        self._device_lock = device_lock
         if self.__bus is None and self.__busnr is not None:
-            async with self.device_lock:
+            async with self._device_lock:
                 self.__bus = SMBus(self.__busnr) if not SIMULATE else None
 
 
