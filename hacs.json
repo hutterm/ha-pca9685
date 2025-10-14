@@ -1,5 +1,4 @@
 {
     "name": "PCA9685",
-    "homeassistant": "2025.3.3",
-    "render_readme": true,
+    "homeassistant": "2025.3.3"
 }
