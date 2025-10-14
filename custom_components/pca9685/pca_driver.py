@@ -72,7 +72,7 @@ class PCA9685Driver:
         }
     )
 
-    def __init__(self, address: int, i2c_bus: SMBus | int | str | None = None,
+    def __init__(self, address: int,
                  device_lock: asyncio.Lock | None = None) -> None:
         """
         Create the PCA9685 driver.
@@ -83,28 +83,29 @@ class PCA9685Driver:
         """
         self.__busnr = None
         self.__bus: SMBus | None = None
-
-        if i2c_bus is None:
-            bus_list = self.get_i2c_bus_numbers()
-            if len(bus_list) < 1:
-                msg = "Cannot determine I2C bus number"
-                raise PCA9685Error(msg)
-            if not SIMULATE:
-                self.__bus = SMBus(bus_list[0])
-            self.__busnr = bus_list[0]
-        if isinstance(i2c_bus, int):
-            self.__busnr = i2c_bus
-            if not SIMULATE:
-                self.__bus = SMBus(i2c_bus)
-        if isinstance(i2c_bus, str):
-            self.__busnr = self.get_i2c_bus_number_from_string(i2c_bus=i2c_bus)
-            if not SIMULATE:
-                self.__bus = SMBus(i2c_bus)
-
+        self._device_lock = device_lock or asyncio.Lock()
         self.__address: int = address
         self.__oscillator_clock = 25000000
-        self._device_lock = device_lock or asyncio.Lock()
 
+    async def init_async(self, i2c_bus: SMBus | int | str | None = None) -> None:
+        """Initialize the driver asynchronously."""
+        async with self._device_lock:
+            if i2c_bus is None:
+                bus_list = self.get_i2c_bus_numbers()
+                if len(bus_list) < 1:
+                    msg = "Cannot determine I2C bus number"
+                    raise PCA9685Error(msg)
+                if not SIMULATE:
+                    self.__bus = SMBus(bus_list[0])
+                self.__busnr = bus_list[0]
+            if isinstance(i2c_bus, int):
+                self.__busnr = i2c_bus
+                if not SIMULATE:
+                    self.__bus = SMBus(i2c_bus)
+            if isinstance(i2c_bus, str):
+                self.__busnr = self.get_i2c_bus_number_from_string(i2c_bus=i2c_bus)
+                if not SIMULATE:
+                    self.__bus = SMBus(i2c_bus)
 
 
     def get_i2c_bus_numbers(self) -> list[int]:

@@ -26,11 +26,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     locks = hass.data[I2C_LOCKS_KEY]
     if bus not in locks:
         locks[bus] = asyncio.Lock()
+        _LOGGER.debug("PCA9685 Created new lock for I2C bus %s", bus)
     device_lock = locks[bus]
 
     pca_driver = PCA9685Driver(
-        address=int(entry.data[CONF_ADDR]), i2c_bus=bus, device_lock=device_lock
+        address=int(entry.data[CONF_ADDR]), device_lock=device_lock
     )
+    await pca_driver.init_async(i2c_bus=bus)
     await pca_driver.set_pwm_frequency(entry.data[CONF_FREQUENCY])
 
     pca9685_data = hass.data.setdefault(DOMAIN, {})
