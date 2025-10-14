@@ -1,13 +1,14 @@
 """Driver code for PCA9685 LED driver."""
 
 import asyncio
+from asyncio import locks
 import logging
 from pathlib import Path
 from types import MappingProxyType
 
 from smbus3 import SMBus
 
-from .const import CONST_PWM_FREQ_MAX, CONST_PWM_FREQ_MIN
+from .const import CONST_PWM_FREQ_MAX, CONST_PWM_FREQ_MIN, DEFAULT_ADDR
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,8 +73,8 @@ class PCA9685Driver:
         }
     )
 
-    def __init__(self, address: int,
-                 device_lock: asyncio.Lock | None = None) -> None:
+    def __init__(self,  i2c_bus: SMBus | int | str | None = None,
+                 address: int = DEFAULT_ADDR) -> None:
         """
         Create the PCA9685 driver.
 
@@ -82,30 +83,29 @@ class PCA9685Driver:
                         See /dev/i2c-*. Use None to autodetect the first available.
         """
         self.__busnr = None
+        if i2c_bus is None:
+            bus_list = self.get_i2c_bus_numbers()
+            if len(bus_list) < 1:
+                msg = "Cannot determine I2C bus number"
+                raise PCA9685Error(msg)
+            self.__busnr = bus_list[0]
+        if isinstance(i2c_bus, int):
+            self.__busnr = i2c_bus
+        if isinstance(i2c_bus, str):
+            self.__busnr = self.get_i2c_bus_number_from_string(i2c_bus=i2c_bus)
+        if isinstance(i2c_bus, SMBus):
+            self.__bus = i2c_bus
+            self.__busnr = 1 # Assume bus 1 if SMBus instance is given
         self.__bus: SMBus | None = None
-        self._device_lock = device_lock or asyncio.Lock()
         self.__address: int = address
         self.__oscillator_clock = 25000000
 
-    async def init_async(self, i2c_bus: SMBus | int | str | None = None) -> None:
+    async def init_async(self, device_lock: asyncio.Lock) -> None:
         """Initialize the driver asynchronously."""
-        async with self._device_lock:
-            if i2c_bus is None:
-                bus_list = self.get_i2c_bus_numbers()
-                if len(bus_list) < 1:
-                    msg = "Cannot determine I2C bus number"
-                    raise PCA9685Error(msg)
-                if not SIMULATE:
-                    self.__bus = SMBus(bus_list[0])
-                self.__busnr = bus_list[0]
-            if isinstance(i2c_bus, int):
-                self.__busnr = i2c_bus
-                if not SIMULATE:
-                    self.__bus = SMBus(i2c_bus)
-            if isinstance(i2c_bus, str):
-                self.__busnr = self.get_i2c_bus_number_from_string(i2c_bus=i2c_bus)
-                if not SIMULATE:
-                    self.__bus = SMBus(i2c_bus)
+        self.device_lock = device_lock
+        if self.__bus is None and self.__busnr is not None:
+            async with self.device_lock:
+                self.__bus = SMBus(self.__busnr) if not SIMULATE else None
 
 
     def get_i2c_bus_numbers(self) -> list[int]:
