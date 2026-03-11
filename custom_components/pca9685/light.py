@@ -130,11 +130,31 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         """Handle entity about to be added to hass event."""
         await super().async_added_to_hass()
+        hardware_state_known = True
+        current_pwm = 0
+        try:
+            current_pwm = await self._driver.get_pwm(self._pin)
+        except Exception as error:  # noqa: BLE001
+            hardware_state_known = False
+            _LOGGER.warning("Could not read startup PWM state for %s: %s", self.name, error)
+        if hardware_state_known:
+            self._attr_is_on = current_pwm > 0
+            if current_pwm > 0:
+                self._attr_brightness = _to_hass_brightness(current_pwm)
+
         if last_state := await self.async_get_last_state():
-            self._attr_is_on = last_state.state == STATE_ON
-            self._attr_brightness = last_state.attributes.get(
-                "brightness", DEFAULT_BRIGHTNESS
-            )
+            try:
+                restored_brightness = int(
+                    last_state.attributes.get("brightness", DEFAULT_BRIGHTNESS)
+                )
+            except (TypeError, ValueError):
+                restored_brightness = DEFAULT_BRIGHTNESS
+            if restored_brightness <= 0:
+                restored_brightness = DEFAULT_BRIGHTNESS
+            if not hardware_state_known:
+                self._attr_is_on = last_state.state == STATE_ON
+            if not self._attr_is_on:
+                self._attr_brightness = restored_brightness
 
     @property
     def should_poll(self) -> bool:
@@ -145,6 +165,8 @@ class PwmSimpleLed(LightEntity, RestoreEntity):
         """Turn on a led."""
         if ATTR_BRIGHTNESS in kwargs:
             self._attr_brightness = kwargs[ATTR_BRIGHTNESS]
+        elif not self._attr_brightness or self._attr_brightness <= 0:
+            self._attr_brightness = DEFAULT_BRIGHTNESS
 
         if ATTR_TRANSITION in kwargs:
             transition_time: timedelta = kwargs[ATTR_TRANSITION]
@@ -258,12 +280,43 @@ class PwmRgbwLed(PwmSimpleLed):
     async def async_added_to_hass(self) -> None:
         """Handle entity about to be added to hass event."""
         await super().async_added_to_hass()
+        restored_brightness = DEFAULT_BRIGHTNESS
         if last_state := await self.async_get_last_state():
             self._attr_hs_color = last_state.attributes.get("hs_color", DEFAULT_COLOR)
             if (
                 self._attr_hs_color is None
             ):  # If HA was forcefully closed, hs_color might contain None
                 self._attr_hs_color = DEFAULT_COLOR
+            try:
+                restored_brightness = int(
+                    last_state.attributes.get("brightness", DEFAULT_BRIGHTNESS)
+                )
+            except (TypeError, ValueError):
+                restored_brightness = DEFAULT_BRIGHTNESS
+            if restored_brightness <= 0:
+                restored_brightness = DEFAULT_BRIGHTNESS
+
+        hardware_state_known = True
+        max_pwm = 0
+        try:
+            current_values = [await self._driver.get_pwm(pin) for pin in self._pins]
+            max_pwm = max(current_values, default=0)
+        except Exception as error:  # noqa: BLE001
+            hardware_state_known = False
+            _LOGGER.warning(
+                "Could not read startup PWM state for %s: %s",
+                self.name,
+                error,
+            )
+        if hardware_state_known:
+            self._attr_is_on = max_pwm > 0
+            if max_pwm > 0:
+                self._attr_brightness = _to_hass_brightness(max_pwm)
+            else:
+                self._attr_brightness = restored_brightness
+        else:
+            if not self._attr_brightness or self._attr_brightness <= 0:
+                self._attr_brightness = restored_brightness
 
     async def async_turn_on(self, **kwargs: ConfigType) -> None:
         """Turn on a LED."""
@@ -271,6 +324,8 @@ class PwmRgbwLed(PwmSimpleLed):
             self._attr_hs_color = kwargs[ATTR_HS_COLOR]
         if ATTR_BRIGHTNESS in kwargs:
             self._attr_brightness = kwargs[ATTR_BRIGHTNESS]
+        elif not self._attr_brightness or self._attr_brightness <= 0:
+            self._attr_brightness = DEFAULT_BRIGHTNESS
 
         color = list(color_util.color_hs_to_RGB(*self._attr_hs_color))
         if len(self._pins) == CONST_RGBW_LED_PINS:
@@ -377,3 +432,16 @@ def _from_hass_brightness(brightness: int | None) -> int:
     if brightness:
         return brightness * CONST_PCA_INT_MULTIPLIER
     return 0
+
+
+def _to_hass_brightness(brightness: int) -> int:
+    """Convert PCA9685 units (0..4095) to Home Assistant brightness (1..255)."""
+    if brightness <= 0:
+        return 0
+    return max(
+        1,
+        min(
+            DEFAULT_BRIGHTNESS,
+            int(round(brightness / CONST_PCA_INT_MULTIPLIER)),
+        ),
+    )
