@@ -1,19 +1,26 @@
 """The pca9685 PWM component."""
 
-import asyncio
 import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_ADDR, CONF_BUS, CONF_FREQUENCY, DOMAIN, PCA9685_DRIVERS
+from .const import (
+    CONF_ADDR,
+    CONF_BUS,
+    CONF_FREQUENCY,
+    DEFAULT_I2C_LOCKS_KEY,
+    DOMAIN,
+    PCA9685_DRIVERS,
+)
+from .i2c_lock import get_i2c_bus_lock
 from .pca_driver import PCA9685Driver
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.LIGHT, Platform.NUMBER]
-I2C_LOCKS_KEY = "i2c_locks"
+I2C_LOCKS_KEY = DEFAULT_I2C_LOCKS_KEY
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -28,15 +35,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         address=int(entry.data[CONF_ADDR]),
     )
     
-    if I2C_LOCKS_KEY not in hass.data:
-        hass.data[I2C_LOCKS_KEY] = {}
-    locks = hass.data[I2C_LOCKS_KEY]
     busnr = pca_driver.busnr
-    if busnr not in locks:
-        locks[busnr] = asyncio.Lock()
+    device_lock, created = get_i2c_bus_lock(hass, I2C_LOCKS_KEY, busnr)
+    if created:
         _LOGGER.warning("PCA9685 Created new lock for I2C bus %s", busnr)
-    device_lock = locks[busnr]
-    await pca_driver.init_async(device_lock=device_lock)
+    await pca_driver.init_async(hass=hass, device_lock=device_lock)
     await pca_driver.set_pwm_frequency(entry.data[CONF_FREQUENCY])
 
     pca9685_data = hass.data.setdefault(DOMAIN, {})

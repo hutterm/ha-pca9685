@@ -1,7 +1,4 @@
 """Driver code for PCA9685 LED driver."""
-
-import asyncio
-from asyncio import locks
 import logging
 from pathlib import Path
 from types import MappingProxyType
@@ -97,15 +94,26 @@ class PCA9685Driver:
             self.__bus = i2c_bus
             self.__busnr = 1 # Assume bus 1 if SMBus instance is given
         self.__bus: SMBus | None = None
+        self._hass = None
+        self._device_lock = None
         self.__address: int = address
         self.__oscillator_clock = 25000000
 
-    async def init_async(self, device_lock: asyncio.Lock) -> None:
+    async def init_async(self, hass, device_lock: object) -> None:
         """Initialize the driver asynchronously."""
+        self._hass = hass
         self._device_lock = device_lock
         if self.__bus is None and self.__busnr is not None:
-            async with self._device_lock:
-                self.__bus = SMBus(self.__busnr) if not SIMULATE else None
+            self.__bus = await self._async_i2c_call(self._open_bus)
+
+    async def _async_i2c_call(self, func, *args):
+        async with self._device_lock:
+            return await self._hass.async_add_executor_job(func, *args)
+
+    def _open_bus(self):
+        if SIMULATE:
+            return None
+        return SMBus(self.__busnr)
 
 
     def get_i2c_bus_numbers(self) -> list[int]:
@@ -168,15 +176,19 @@ class PCA9685Driver:
         self.__check_range("led_value", value)
 
         register_low = self.calc_led_register(led_num)
-        async with self._device_lock:
-            self.write(register_low, value_low(value))
-            self.write(register_low + 1, value_high(value))
+        await self._async_i2c_call(self._set_pwm_sync, register_low, value)
+
+    def _set_pwm_sync(self, register_low: int, value: int) -> None:
+        self.write(register_low, value_low(value))
+        self.write(register_low + 1, value_high(value))
 
     async def __get_led_value(self, register_low: int) -> int:
-        async with self._device_lock:
-            low = self.read(register_low)
-            high = self.read(register_low + 1)
-            return low + (high * 256)
+        return await self._async_i2c_call(self._get_led_value_sync, register_low)
+
+    def _get_led_value_sync(self, register_low: int) -> int:
+        low = self.read(register_low)
+        high = self.read(register_low + 1)
+        return low + (high * 256)
 
     async def get_pwm(self, led_num: int) -> int:
         """Get LED PWM value."""
@@ -237,10 +249,12 @@ class PCA9685Driver:
         self.__check_range("pwm_frequency", value)
         reg_val = self.calc_pre_scale(value)
         _LOGGER.debug("Calculated prescale value is %d", reg_val)
-        async with self._device_lock:
-            self.sleep()
-            self.write(Registers.PRE_SCALE, reg_val)
-            self.wake()
+        await self._async_i2c_call(self._set_pwm_frequency_sync, reg_val)
+
+    def _set_pwm_frequency_sync(self, reg_val: int) -> None:
+        self.sleep()
+        self.write(Registers.PRE_SCALE, reg_val)
+        self.wake()
 
     def calc_frequency(self, prescale: int) -> int:
         """
@@ -254,5 +268,7 @@ class PCA9685Driver:
 
     async def get_pwm_frequency(self) -> int:
         """Get the frequency for PWM output."""
-        async with self._device_lock:
-            return self.calc_frequency(self.read(Registers.PRE_SCALE))
+        return await self._async_i2c_call(self._get_pwm_frequency_sync)
+
+    def _get_pwm_frequency_sync(self) -> int:
+        return self.calc_frequency(self.read(Registers.PRE_SCALE))
