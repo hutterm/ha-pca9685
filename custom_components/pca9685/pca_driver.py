@@ -1,5 +1,7 @@
 """Driver code for PCA9685 LED driver."""
+import importlib
 import logging
+from ctypes import c_ulong
 from pathlib import Path
 from types import MappingProxyType
 
@@ -10,6 +12,26 @@ from .const import CONST_PWM_FREQ_MAX, CONST_PWM_FREQ_MIN, DEFAULT_ADDR
 _LOGGER = logging.getLogger(__name__)
 
 SIMULATE = False
+
+
+def _is_smbus_buffer_overflow(error: BaseException) -> bool:
+    """Check whether an error is the known smbus3 Python 3.14 overflow issue."""
+    return isinstance(error, SystemError) and "buffer overflow" in str(error).lower()
+
+
+def _patch_smbus_i2c_funcs_call() -> None:
+    """Patch smbus3 so I2C_FUNCS uses a native-width integer buffer."""
+    smbus_module = importlib.import_module(SMBus.__module__)
+    if getattr(smbus_module, "_pca9685_i2c_funcs_patch_applied", False):
+        return
+
+    def _get_funcs_compat(self) -> int:
+        funcs = c_ulong()
+        smbus_module.ioctl(self.fd, smbus_module.I2C_FUNCS, funcs)
+        return funcs.value
+
+    setattr(SMBus, "_get_funcs", _get_funcs_compat)
+    setattr(smbus_module, "_pca9685_i2c_funcs_patch_applied", True)
 
 
 class PCA9685Error(Exception):
@@ -113,7 +135,24 @@ class PCA9685Driver:
     def _open_bus(self):
         if SIMULATE:
             return None
-        return SMBus(self.__busnr)
+        bus = SMBus()
+        try:
+            bus.open(self.__busnr)
+        except SystemError as error:
+            if not _is_smbus_buffer_overflow(error):
+                raise
+            _LOGGER.warning(
+                (
+                    "Detected smbus3 I2C_FUNCS buffer overflow on bus %s; "
+                    "applying compatibility workaround"
+                ),
+                self.__busnr,
+            )
+            bus.close()
+            _patch_smbus_i2c_funcs_call()
+            bus = SMBus()
+            bus.open(self.__busnr)
+        return bus
 
 
     def get_i2c_bus_numbers(self) -> list[int]:
